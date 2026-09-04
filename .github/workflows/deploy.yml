@@ -68,28 +68,39 @@ jobs:
       # ----------------------------------------------------------------
       # 3. SSH setup. The only step that handles key material.
       # ----------------------------------------------------------------
+      # The private key is passphrase-protected, so it is unlocked once here
+      # and held by ssh-agent. SSH_AUTH_SOCK is exported to every later step;
+      # the key itself is never written to disk.
+      - name: Load the deploy key into ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+          ssh-passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
+
       - name: Configure SSH
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           umask 077
           mkdir -p ~/.ssh
 
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          # Confirm the agent actually holds an identity. Prints nothing.
+          ssh-add -l >/dev/null 2>&1 \
+            || { echo "FATAL: no identities loaded in the SSH agent"; exit 1; }
+
 
           if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
-            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >> ~/.ssh/known_hosts
           else
             echo "::warning::DEPLOY_KNOWN_HOSTS is not set; trusting the host key on first sight."
-            ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
+            ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           fi
           chmod 600 ~/.ssh/known_hosts
           test -s ~/.ssh/known_hosts
 
           # Host alias, so no later step has to touch a secret itself.
+          # No IdentityFile/IdentitiesOnly: the identity comes from the agent.
           # If auth fails with "no mutually supported signature algorithm",
           # add:  PubkeyAcceptedAlgorithms +ssh-rsa
           cat > ~/.ssh/config <<EOF
@@ -97,8 +108,6 @@ jobs:
             HostName $DEPLOY_HOST
             User $DEPLOY_USER
             Port $DEPLOY_PORT
-            IdentityFile ~/.ssh/deploy_key
-            IdentitiesOnly yes
             StrictHostKeyChecking yes
             UserKnownHostsFile ~/.ssh/known_hosts
             BatchMode yes
