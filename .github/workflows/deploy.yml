@@ -68,27 +68,55 @@ jobs:
       # ----------------------------------------------------------------
       # 3. SSH setup. The only step that handles key material.
       # ----------------------------------------------------------------
-      # The private key is passphrase-protected, so it is unlocked once here
-      # and held by ssh-agent. SSH_AUTH_SOCK is exported to every later step;
-      # the key itself is never written to disk.
-      - name: Load the deploy key into ssh-agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-          ssh-passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
-
       - name: Configure SSH
         env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_PASSPHRASE: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           umask 077
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # The key lands on disk only long enough for ssh-add to read it.
+          # The trap wipes it (and the askpass helper) even if a step below
+          # fails, so neither file outlives this step.
+          ASKPASS="$RUNNER_TEMP/askpass"
+          trap 'rm -f ~/.ssh/deploy_key "$ASKPASS"' EXIT
+
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # The helper echoes the passphrase it inherits from this step's
+          # environment. Quoted heredoc, so the value is never expanded into
+          # the file, never passed as an argument, and never logged.
+          cat > "$ASKPASS" <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' "$DEPLOY_SSH_PASSPHRASE"
+          EOF
+          chmod 700 "$ASKPASS"
+
+          # Start the agent and publish its socket to every later step.
+          eval "$(ssh-agent -s)" >/dev/null
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+
+          # SSH_ASKPASS_REQUIRE=force covers OpenSSH >= 8.4; DISPLAY plus the
+          # absence of a tty covers older builds. The timeout matters: a wrong
+          # passphrase makes ssh-add retry indefinitely on newer OpenSSH, which
+          # would stall the job instead of failing it.
+          if ! SSH_ASKPASS="$ASKPASS" SSH_ASKPASS_REQUIRE=force DISPLAY=:0 \
+               timeout 60 ssh-add ~/.ssh/deploy_key < /dev/null; then
+            echo "FATAL: could not unlock the deploy key."
+            echo "       Check DEPLOY_SSH_KEY (PEM body plus a trailing newline)"
+            echo "       and DEPLOY_SSH_PASSPHRASE."
+            exit 1
+          fi
 
           # Confirm the agent actually holds an identity. Prints nothing.
           ssh-add -l >/dev/null 2>&1 \
             || { echo "FATAL: no identities loaded in the SSH agent"; exit 1; }
-
 
           if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
             printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >> ~/.ssh/known_hosts
