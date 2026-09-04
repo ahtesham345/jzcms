@@ -1,0 +1,396 @@
+name: Deploy to production (cPanel, flattened layout)
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      prune:
+        description: "Also delete server files that no longer exist in the repo. ONLY enable if public_html contains nothing except this Laravel app."
+        type: boolean
+        default: false
+
+# Never run two deploys at once, and never cancel one mid-flight.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build assets and deploy over SSH
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      # Optional. Leave these secrets unset to use the defaults.
+      PHP_BIN: ${{ secrets.DEPLOY_PHP_BIN || 'php' }}
+      COMPOSER_BIN: ${{ secrets.DEPLOY_COMPOSER_BIN || 'composer' }}
+      RSYNC_PRUNE: ${{ inputs.prune && '--delete' || '' }}
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. Source
+      # ----------------------------------------------------------------
+      - name: Check out master
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # 2. Build front-end assets HERE, not on the cPanel box.
+      #    public/build is gitignored, so this step is what produces it.
+      # ----------------------------------------------------------------
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Vite assets
+        run: npm run build
+
+      - name: Verify the build produced a manifest
+        run: |
+          set -euo pipefail
+          test -f public/build/manifest.json
+          # A stale dev-server marker would point production at localhost:5173.
+          rm -f public/hot
+
+      # ----------------------------------------------------------------
+      # 3. SSH setup. The only step that handles key material.
+      # ----------------------------------------------------------------
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::DEPLOY_KNOWN_HOSTS is not set; trusting the host key on first sight."
+            ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts
+
+          # Host alias, so no later step has to touch a secret itself.
+          # If auth fails with "no mutually supported signature algorithm",
+          # add:  PubkeyAcceptedAlgorithms +ssh-rsa
+          cat > ~/.ssh/config <<EOF
+          Host deploy
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            Port $DEPLOY_PORT
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            BatchMode yes
+            ServerAliveInterval 30
+            ServerAliveCountMax 6
+          EOF
+          chmod 600 ~/.ssh/config
+
+          # Helper: pipes a script to the server over stdin (never via argv,
+          # so the deploy path never shows up in the server's process list).
+          cat > "$RUNNER_TEMP/remote" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          {
+            printf 'APP_DIR=%q\nPHP_BIN=%q\nCOMPOSER_BIN=%q\n' \
+              "$DEPLOY_PATH" "$PHP_BIN" "$COMPOSER_BIN"
+            cat
+          } | ssh deploy 'bash -s'
+          EOF
+          chmod +x "$RUNNER_TEMP/remote"
+
+      # ----------------------------------------------------------------
+      # 4. Preflight: fail before touching anything if the box isn't ready.
+      # ----------------------------------------------------------------
+      - name: Preflight checks on the server
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/remote" <<'SH'
+          set -euo pipefail
+          cd "$APP_DIR"
+
+          # Flattened layout: the front controller lives at the root.
+          for f in artisan bootstrap/app.php .env index.php; do
+            [ -e "$f" ] || { echo "FATAL: $f missing in the deploy path"; exit 1; }
+          done
+          for d in storage vendor public; do
+            [ -d "$d" ] || { echo "FATAL: $d/ missing in the deploy path"; exit 1; }
+          done
+
+          # These must survive the deploy untouched.
+          [ -L public/storage ] || echo "::warning::public/storage is not a symlink; uploaded files may not be reachable."
+          [ -d storage/app/public ] || echo "::warning::storage/app/public is missing."
+
+          command -v rsync           >/dev/null || { echo "FATAL: rsync not available on the server"; exit 1; }
+          command -v "$PHP_BIN"      >/dev/null || { echo "FATAL: PHP binary '$PHP_BIN' not found"; exit 1; }
+          command -v "$COMPOSER_BIN" >/dev/null || { echo "FATAL: composer '$COMPOSER_BIN' not found"; exit 1; }
+          { [ -w storage ] && [ -w bootstrap/cache ]; } || { echo "FATAL: storage/ or bootstrap/cache/ not writable"; exit 1; }
+
+          echo "PHP:      $("$PHP_BIN" -r 'echo PHP_VERSION;')"
+          echo "Composer: $("$COMPOSER_BIN" --version --no-interaction 2>/dev/null | head -n1)"
+
+          # Informational: tells you which build/ directory Laravel reads the
+          # Vite manifest from. The deploy writes to BOTH, so either is fine.
+          echo -n "Laravel public_path(): "
+          "$PHP_BIN" -r 'require "vendor/autoload.php"; $a = require "bootstrap/app.php"; echo $a->publicPath(), PHP_EOL;' 2>/dev/null \
+            || echo "(could not resolve)"
+          SH
+
+      # ----------------------------------------------------------------
+      # 5. Maintenance mode, so nobody hits a half-updated codebase.
+      # ----------------------------------------------------------------
+      - name: Enable maintenance mode
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/remote" <<'SH'
+          set -euo pipefail
+          cd "$APP_DIR"
+          "$PHP_BIN" artisan down --retry=60 || echo "WARN: could not enter maintenance mode; continuing"
+          SH
+
+      # ----------------------------------------------------------------
+      # 6. Ship the code.
+      #    No --delete on the application tree by default: public_html on
+      #    cPanel also holds cgi-bin/, .well-known/, the host .htaccess and
+      #    sometimes other domains' document roots.
+      #    The two build/ directories get their own --delete passes below.
+      # ----------------------------------------------------------------
+      - name: Sync application code
+        run: |
+          set -euo pipefail
+
+          cat > "$RUNNER_TEMP/rsync-excludes" <<'EOF'
+          # --- repo-only, never send ---
+          /.git/
+          /.github/
+          /.gitignore
+          /.gitattributes
+          /.editorconfig
+          /node_modules/
+          /tests/
+          /phpunit.xml
+          /pint.json
+          /.phpunit.result.cache
+          /*.md
+
+          # --- production-owned: never send, never delete ---
+          /.env
+          /.env.*
+          /vendor/
+          /storage/
+          /bootstrap/cache/
+          /public/storage
+          /public/hot
+          /hot
+
+          # --- flattened cPanel front controller: server-owned, never touch ---
+          /index.php
+          /.htaccess
+
+          # --- Vite output: handled by the dedicated --delete passes ---
+          /build/
+          /public/build/
+
+          # --- uncomment if you have customised these on the server too ---
+          # /public/index.php
+          # /public/.htaccess
+
+          # --- cPanel / host-owned files that also live in public_html ---
+          /.htpasswd
+          /.user.ini
+          /php.ini
+          /cgi-bin/
+          /.well-known/
+          /error_log
+          /cpanel*
+          EOF
+
+          rsync -rltz --human-readable --stats \
+            --perms --chmod=D755,F644 --no-owner --no-group --omit-dir-times \
+            --exclude-from="$RUNNER_TEMP/rsync-excludes" \
+            $RSYNC_PRUNE \
+            ./ "deploy:$DEPLOY_PATH/"
+
+      # The live assets. Browsers fetch /build/... from the document root,
+      # so this is the copy that actually serves. --delete is safe here:
+      # the directory holds nothing but generated Vite output.
+      - name: Sync Vite assets to the live build directory
+        run: |
+          set -euo pipefail
+          rsync -rltz --delete --human-readable \
+            --perms --chmod=D755,F644 --no-owner --no-group --omit-dir-times \
+            ./public/build/ "deploy:$DEPLOY_PATH/build/"
+
+      # Laravel resolves the manifest through public_path(). Depending on how
+      # the flattened index.php is written that is either the root or public/,
+      # so mirror the same output into public/build/ and let both be correct.
+      - name: Mirror Vite assets to public/build
+        run: |
+          set -euo pipefail
+          rsync -rltz --delete --human-readable \
+            --perms --chmod=D755,F644 --no-owner --no-group --omit-dir-times \
+            ./public/build/ "deploy:$DEPLOY_PATH/public/build/"
+
+      # ----------------------------------------------------------------
+      # 7. Dependencies, backup, migrations, caches.
+      # ----------------------------------------------------------------
+      - name: Install PHP dependencies (production)
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/remote" <<'SH'
+          set -euo pipefail
+          cd "$APP_DIR"
+          # Stale dev-server markers, in either possible public root.
+          rm -f hot public/hot
+          export COMPOSER_MEMORY_LIMIT=-1
+          export COMPOSER_NO_INTERACTION=1
+          "$COMPOSER_BIN" install \
+            --no-dev \
+            --prefer-dist \
+            --no-interaction \
+            --no-progress \
+            --no-ansi \
+            --optimize-autoloader
+          SH
+
+      - name: Back up the database before migrating
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/remote" <<'SH'
+          set -euo pipefail
+          cd "$APP_DIR"
+
+          # Read values straight from the server's own .env. Nothing is echoed.
+          env_get() {
+            sed -n "s/^[[:space:]]*$1=//p" .env | head -n1 \
+              | sed -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"
+          }
+
+          case "$(env_get DB_CONNECTION)" in
+            mysql|mariadb) ;;
+            *) echo "Skipping dump: DB_CONNECTION is not MySQL/MariaDB."; exit 0 ;;
+          esac
+
+          if ! command -v mysqldump >/dev/null 2>&1; then
+            echo "::warning::mysqldump not found; deploying without a pre-migration backup."
+            exit 0
+          fi
+
+          BACKUP_DIR="$(dirname "$APP_DIR")/deploy-backups"   # outside the web root
+          mkdir -p "$BACKUP_DIR"
+          chmod 700 "$BACKUP_DIR"
+
+          umask 077
+          CNF="$(mktemp)"
+          trap 'rm -f "$CNF"' EXIT
+          {
+            echo "[client]"
+            echo "host=$(env_get DB_HOST)"
+            echo "port=$(env_get DB_PORT)"
+            echo "user=$(env_get DB_USERNAME)"
+            echo "password=$(env_get DB_PASSWORD)"
+          } > "$CNF"
+
+          OUT="$BACKUP_DIR/$(date -u +%Y%m%d-%H%M%S)-pre-deploy.sql.gz"
+          mysqldump --defaults-extra-file="$CNF" \
+            --single-transaction --quick --routines --triggers --no-tablespaces \
+            "$(env_get DB_DATABASE)" | gzip -9 > "$OUT"
+
+          [ -s "$OUT" ] || { echo "FATAL: dump is empty; aborting before migrations."; exit 1; }
+          echo "Backup written: $(basename "$OUT") ($(du -h "$OUT" | cut -f1))"
+
+          # Keep the 10 most recent dumps.
+          { ls -1t "$BACKUP_DIR"/*-pre-deploy.sql.gz 2>/dev/null || true; } | tail -n +11 | xargs -r rm -f
+          SH
+
+      - name: Run migrations
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/remote" <<'SH'
+          set -euo pipefail
+          cd "$APP_DIR"
+          "$PHP_BIN" artisan migrate --force --no-interaction
+          SH
+
+      - name: Rebuild Laravel caches
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/remote" <<'SH'
+          set -euo pipefail
+          cd "$APP_DIR"
+
+          "$PHP_BIN" artisan optimize:clear
+
+          # storage:link is deliberately NOT run. In this flattened layout
+          # public_path() can resolve to the document root, where "storage"
+          # is your real Laravel storage/ directory -- artisan would either
+          # abort or, with --force, delete it. The link already exists.
+          [ -L public/storage ] || echo "::warning::public/storage symlink is missing; recreate it by hand."
+
+          "$PHP_BIN" artisan config:cache
+          "$PHP_BIN" artisan event:cache
+          "$PHP_BIN" artisan view:cache
+          # route:cache is deliberately omitted: routes/web.php still defines
+          # closure actions ('/' and '/dashboard'), which cannot be serialized.
+          # Move them into controllers, then add: "$PHP_BIN" artisan route:cache
+
+          "$PHP_BIN" artisan queue:restart || true
+          SH
+
+      # ----------------------------------------------------------------
+      # 8. Always bring the site back up, even if something above failed.
+      # ----------------------------------------------------------------
+      - name: Disable maintenance mode
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -x "$RUNNER_TEMP/remote" ] || exit 0
+          "$RUNNER_TEMP/remote" <<'SH'
+          set -euo pipefail
+          cd "$APP_DIR"
+          "$PHP_BIN" artisan up
+          SH
+
+      - name: Smoke check
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/remote" <<'SH'
+          set -euo pipefail
+          cd "$APP_DIR"
+
+          "$PHP_BIN" artisan about --only=environment
+
+          # The manifest must exist where Laravel will look for it.
+          PUBLIC_PATH="$("$PHP_BIN" -r 'require "vendor/autoload.php"; $a = require "bootstrap/app.php"; echo $a->publicPath();' 2>/dev/null || true)"
+          if [ -n "$PUBLIC_PATH" ]; then
+            [ -f "$PUBLIC_PATH/build/manifest.json" ] \
+              || { echo "FATAL: no Vite manifest at $PUBLIC_PATH/build/manifest.json"; exit 1; }
+            echo "Vite manifest OK at $PUBLIC_PATH/build/manifest.json"
+          fi
+
+          # And where the browser will fetch the files from.
+          [ -f build/manifest.json ] || { echo "FATAL: no manifest in the live build/ directory"; exit 1; }
+          [ -L public/storage ] || echo "::warning::public/storage symlink is missing."
+          echo "Live assets OK in build/"
+          SH

@@ -6,7 +6,7 @@
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
                     <a href="{{ route('dashboard') }}" class="flex items-center">
-                        <span class="text-xl font-bold text-gray-800">{{ config('jzcms.short_name', 'JZCMS') }}</span>
+                        <span class="text-xl font-bold text-gray-800">{{ \App\Models\Setting::current()->brandName() }}</span>
                     </a>
                 </div>
 

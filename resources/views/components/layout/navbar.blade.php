@@ -10,9 +10,17 @@
                     </svg>
                 </button>
 
-                <!-- Application Name (visible on desktop) -->
+                <!-- Institution Name (visible on desktop) -->
+                {{-- The saved institution name, in the institution's own
+                     default language: Urdu when that is the configured
+                     default and an Urdu name has been entered, English
+                     otherwise. Nothing else in this bar changes - the
+                     mobile menu button, the notifications and the profile
+                     dropdown are untouched. --}}
                 <div class="hidden lg:flex lg:items-center lg:ml-0">
-                    <h1 class="text-lg font-semibold text-gray-800">{{ config('jzcms.name') }}</h1>
+                    <h1 class="text-lg font-semibold text-gray-800">
+                        {{ \App\Models\Setting::current()->brandName() }}
+                    </h1>
                 </div>
             </div>
 

@@ -4,7 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? config('jzcms.short_name') }} - {{ config('jzcms.name') }}</title>
+    {{-- The institution's own name in the browser tab. Setting::current()
+         is memoised, so the sidebar and navbar below cost no extra
+         query for asking again. --}}
+    <title>{{ $title ?? 'Dashboard' }} - {{ \App\Models\Setting::current()->brandName() }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         [x-cloak] { display: none !important; }

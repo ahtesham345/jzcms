@@ -1,0 +1,60 @@
+<?php
+
+namespace App\Http\Requests\Admin;
+
+use App\Models\ParentGuardian;
+use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class UpdateParentRequest extends FormRequest
+{
+    /**
+     * Determine if the user is authorized to make this request.
+     */
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        return [
+            // The parent ID is immutable: it is displayed read only and can
+            // never be changed through request data.
+            'parent_id' => ['nullable', 'prohibited'],
+            'photo' => ['nullable', 'image', 'mimes:jpeg,jpg,png', 'max:2048'],
+            'full_name' => ['required', 'string', 'max:255'],
+            'father_name' => ['nullable', 'string', 'max:255'],
+            'gender' => ['required', Rule::in(ParentGuardian::GENDERS)],
+            'cnic_number' => ['nullable', 'string', 'max:255'],
+            'mobile_number' => ['required', 'string', 'max:255'],
+            'alternate_mobile' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'address' => ['nullable', 'string'],
+            'occupation' => ['nullable', 'string', 'max:255'],
+            'parent_status' => ['required', Rule::in(ParentGuardian::STATUSES)],
+            'notes' => ['nullable', 'string'],
+        ];
+    }
+
+    /**
+     * Get the custom validation messages.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'parent_id.prohibited' => 'The parent ID is generated automatically and cannot be changed.',
+            'photo.image' => 'The photo must be an image file.',
+            'photo.mimes' => 'The photo must be a JPG, JPEG or PNG file.',
+            'photo.max' => 'The photo may not be larger than 2MB.',
+        ];
+    }
+}

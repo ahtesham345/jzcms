@@ -35,6 +35,14 @@ class PermissionSeeder extends Seeder
             'permissions.create',
             'permissions.edit',
             'permissions.delete',
+
+            // Institution Settings
+            //
+            // Two, not four. The settings are a single global record with
+            // no create and no delete, so "view" and "update" are the only
+            // two things anybody can do to them.
+            'settings.view',
+            'settings.update',
         ];
 
         foreach ($permissions as $permission) {
@@ -58,6 +66,10 @@ class PermissionSeeder extends Seeder
             'users.view',
             'users.create',
             'users.edit',
+            // The institution's own details are the administrator's to
+            // keep. Nobody below Admin gets either half.
+            'settings.view',
+            'settings.update',
         ]);
 
         // Principal permissions
