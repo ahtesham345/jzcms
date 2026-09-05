@@ -31,7 +31,7 @@ class AttendanceTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** August 2026: Mondays fall on the 3rd, weekends on the 1st and 2nd. */
+    /** August 2026: the 1st is a Saturday (a working day), the 2nd a Sunday. */
     private const YEAR = 2026;
 
     private const MONTH = 8;
@@ -391,48 +391,63 @@ class AttendanceTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Weekends */
+    /* The weekly off day */
     /* ---------------------------------------------------------------- */
 
-    public function test_saturday_and_sunday_are_shown_as_off_days(): void
+    public function test_sunday_is_the_only_off_day_shown(): void
     {
         $enrollment = $this->madrassaEnrollment();
 
         $response = $this->open($this->madrassaGroup())->assertOk();
         $days = collect($response->viewData('days'))->keyBy('date');
 
-        $this->assertTrue($days[self::SATURDAY]['is_off_day']);
         $this->assertTrue($days[self::SUNDAY]['is_off_day']);
+
+        // Saturday works like any other day now.
+        $this->assertFalse($days[self::SATURDAY]['is_off_day']);
         $this->assertFalse($days[self::MONDAY]['is_off_day']);
 
         $response->assertSee('OFF');
 
         // Off days are not cells: there is nothing on the sheet to mark.
         $cells = $response->viewData('cells');
-        $this->assertArrayNotHasKey(StudentAttendance::cellKey($enrollment->id, self::SATURDAY), $cells);
         $this->assertArrayNotHasKey(StudentAttendance::cellKey($enrollment->id, self::SUNDAY), $cells);
+        $this->assertArrayHasKey(StudentAttendance::cellKey($enrollment->id, self::SATURDAY), $cells);
         $this->assertArrayHasKey(StudentAttendance::cellKey($enrollment->id, self::MONDAY), $cells);
     }
 
-    public function test_the_grid_renders_one_control_per_teaching_cell_and_none_on_weekends(): void
+    public function test_every_weekday_and_saturday_is_a_teaching_day(): void
+    {
+        $days = collect(StudentAttendance::monthDays(self::YEAR, self::MONTH))->keyBy('date');
+
+        // The first full week of August 2026: Monday the 3rd to Sunday the
+        // 9th. Only the Sunday is off.
+        foreach (['2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07', '2026-08-08'] as $working) {
+            $this->assertFalse($days[$working]['is_off_day'], "{$working} should be a working day.");
+        }
+
+        $this->assertTrue($days['2026-08-09']['is_off_day']);
+
+        // Five Sundays in the month, so 26 of its 31 days are taught.
+        $this->assertSame(26, StudentAttendance::teachingDaysInMonth(self::YEAR, self::MONTH));
+    }
+
+    public function test_the_grid_renders_one_control_per_teaching_cell_and_none_on_the_off_day(): void
     {
         $this->madrassaEnrollment($this->student('Ahmed Ali'));
         $this->madrassaEnrollment($this->student('Hassan Raza'));
 
         $html = $this->open($this->madrassaGroup())->assertOk()->getContent();
 
-        // Two students across twenty-one teaching days, and nothing
-        // clickable on the ten weekend days.
-        $this->assertSame(42, substr_count($html, 'w-7 h-7 rounded border-2'));
-        $this->assertSame(10, substr_count($html, '>OFF<'));
+        // Two students across twenty-six teaching days, and nothing
+        // clickable on the five Sundays.
+        $this->assertSame(52, substr_count($html, 'w-7 h-7 rounded border-2'));
+        $this->assertSame(5, substr_count($html, '>OFF<'));
     }
 
-    public function test_weekend_attendance_cannot_be_saved(): void
+    public function test_sunday_attendance_cannot_be_saved(): void
     {
         $enrollment = $this->madrassaEnrollment();
-
-        $this->save($this->madrassaGroup(), [$this->cell($enrollment, self::SATURDAY)])
-            ->assertSessionHasErrors('attendance.0.attendance_date');
 
         $this->save($this->madrassaGroup(), [$this->cell($enrollment, self::SUNDAY)])
             ->assertSessionHasErrors('attendance.0.attendance_date');
@@ -440,18 +455,45 @@ class AttendanceTest extends TestCase
         $this->assertDatabaseCount('student_attendances', 0);
     }
 
-    public function test_a_weekend_cell_is_rejected_even_among_valid_days(): void
+    public function test_saturday_attendance_can_be_saved(): void
+    {
+        $enrollment = $this->madrassaEnrollment();
+
+        $this->save($this->madrassaGroup(), [$this->cell($enrollment, self::SATURDAY)])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('student_attendances', [
+            'student_academic_enrollment_id' => $enrollment->id,
+            'attendance_date' => self::SATURDAY,
+            'status' => 'Present',
+        ]);
+    }
+
+    public function test_a_sunday_cell_is_rejected_even_among_valid_days(): void
     {
         $enrollment = $this->madrassaEnrollment();
 
         // The transaction is all or nothing, so the good days go with it.
         $this->save($this->madrassaGroup(), [
             $this->cell($enrollment, self::MONDAY),
-            $this->cell($enrollment, self::SATURDAY),
+            $this->cell($enrollment, self::SUNDAY),
             $this->cell($enrollment, self::TUESDAY),
         ])->assertSessionHasErrors('attendance.1.attendance_date');
 
         $this->assertDatabaseCount('student_attendances', 0);
+    }
+
+    public function test_a_saturday_cell_saves_alongside_the_weekdays(): void
+    {
+        $enrollment = $this->madrassaEnrollment();
+
+        $this->save($this->madrassaGroup(), [
+            $this->cell($enrollment, self::MONDAY),
+            $this->cell($enrollment, self::SATURDAY),
+            $this->cell($enrollment, self::TUESDAY),
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('student_attendances', 3);
     }
 
     public function test_off_days_are_not_counted_as_unmarked(): void
@@ -460,10 +502,11 @@ class AttendanceTest extends TestCase
 
         $summary = $this->open($this->madrassaGroup())->assertOk()->viewData('summary');
 
-        // August 2026 has 21 weekdays, and one student on the sheet.
-        $this->assertSame(21, $summary['teaching_days']);
+        // August 2026 has 26 working days - every day but its five Sundays -
+        // and one student on the sheet.
+        $this->assertSame(26, $summary['teaching_days']);
         $this->assertSame(1, $summary['students']);
-        $this->assertSame(21, $summary['unmarked']);
+        $this->assertSame(26, $summary['unmarked']);
     }
 
     /* ---------------------------------------------------------------- */
@@ -718,9 +761,9 @@ class AttendanceTest extends TestCase
         $this->save($this->madrassaGroup(), [$this->cell($enrollment, self::MONDAY)])
             ->assertSessionHasNoErrors();
 
-        // Twenty-one teaching days in the month, one of them entered.
+        // Twenty-six teaching days in the month, one of them entered.
         $this->assertSame(1, StudentAttendance::count());
-        $this->assertSame(20, $this->open($this->madrassaGroup())->viewData('summary')['unmarked']);
+        $this->assertSame(25, $this->open($this->madrassaGroup())->viewData('summary')['unmarked']);
     }
 
     public function test_existing_attendance_is_updated_rather_than_duplicated(): void
@@ -792,8 +835,8 @@ class AttendanceTest extends TestCase
 
         $this->save($this->madrassaGroup(), $cells)->assertSessionHasNoErrors();
 
-        // Four students across twenty-one teaching days.
-        $this->assertDatabaseCount('student_attendances', 84);
+        // Four students across twenty-six teaching days.
+        $this->assertDatabaseCount('student_attendances', 104);
         $this->assertSame(0, $this->open($this->madrassaGroup())->viewData('summary')['unmarked']);
     }
 

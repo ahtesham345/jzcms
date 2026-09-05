@@ -13,7 +13,7 @@ use App\Models\Department;
 use App\Models\ParentGuardian;
 use App\Models\Section;
 use App\Models\Student;
-use App\Models\StudentAcademicEnrollment;
+use App\Support\AcademicPlacement;
 use App\Support\AdmissionApplicationFilters;
 use App\Support\ResultReportLanguage;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -227,7 +227,12 @@ class AdmissionApplicationController extends Controller
                     ]);
 
                     $this->createEnrollments($application, $student, $placement);
-                    $this->linkFather($application, $student);
+
+                    // The student carries the application's father_name and
+                    // father_mobile verbatim, so this records exactly what the
+                    // application said about him. Shared with manual student
+                    // creation, which needs the same record and the same link.
+                    ParentGuardian::createFatherFor($student);
 
                     // Not mass assigned: student_id is never accepted from a form.
                     $application->student_id = $student->id;
@@ -242,51 +247,6 @@ class AdmissionApplicationController extends Controller
                 }
             }
         }
-    }
-
-    /**
-     * Create a basic father parent record and link it to the student.
-     *
-     * A new record every time, deliberately. No existing parent is searched
-     * for or reused: one father may give a different mobile number for each
-     * child, so a number identifies nobody reliably, and a wrong reuse
-     * silently attaches a child to the wrong family. Two records for one man
-     * is the safer failure, and the admin resolves it from Parent Management
-     * by completing the right record (CNIC and the rest) and relinking by
-     * hand. Automatic merging and duplicate detection are out of scope.
-     *
-     * Called inside the approval transaction, so a failure anywhere in the
-     * approval rolls this parent and its link back with everything else.
-     *
-     * The mother is deliberately not handled: the application carries a
-     * mother_mobile but no mother name, and a parent record will not be
-     * invented from a number alone. Her details stay on the student record
-     * as they are today.
-     */
-    private function linkFather(AdmissionApplication $application, Student $student): void
-    {
-        $name = trim((string) $application->father_name);
-        $mobile = trim((string) $application->father_mobile);
-
-        // A parent record needs at least a name and a mobile to satisfy the
-        // rules the Parent forms enforce. Without them the approval simply
-        // proceeds without a parent: the admin can link one by hand later.
-        if ($name === '' || $mobile === '') {
-            return;
-        }
-
-        $parent = ParentGuardian::createWithParentId([
-            'full_name' => $name,
-            'mobile_number' => $mobile,
-            // The link being created is Father, so the record is a man's.
-            // Nothing else about him is known from the application, and
-            // nothing else is invented — CNIC, email, address and occupation
-            // are filled in from Parent Management afterwards.
-            'gender' => 'Male',
-            'parent_status' => 'Active',
-        ]);
-
-        $parent->linkStudent($student->id, 'Father', true);
     }
 
     /**
@@ -391,6 +351,10 @@ class AdmissionApplicationController extends Controller
 
     /**
      * Record a single active enrollment.
+     *
+     * The write itself lives on AcademicPlacement, shared with manual
+     * student creation so an admitted student and a manually entered one
+     * end up with the same enrollment rows.
      */
     private function createEnrollment(
         Student $student,
@@ -401,18 +365,15 @@ class AdmissionApplicationController extends Controller
         string $startDate,
         int $academicSessionId
     ): void {
-        StudentAcademicEnrollment::create([
-            'student_id' => $student->id,
-            // The session the admin approved into, the same one written to
-            // the student record.
-            'academic_session_id' => $academicSessionId,
-            'academic_track' => $track,
-            'department_id' => $departmentId,
-            'academic_class_id' => $academicClassId,
-            'section_id' => $sectionId,
-            'start_date' => $startDate,
-            'status' => 'Active',
-        ]);
+        AcademicPlacement::recordEnrollment(
+            $student,
+            $track,
+            $departmentId,
+            $academicClassId,
+            $sectionId,
+            $startDate,
+            $academicSessionId
+        );
     }
 
     /**

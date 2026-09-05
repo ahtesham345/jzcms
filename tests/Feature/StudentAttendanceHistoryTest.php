@@ -664,13 +664,14 @@ class StudentAttendanceHistoryTest extends TestCase
 
         $first = $this->open($enrollment->student, $this->august(['attendance_period' => 'all']))->assertOk();
 
-        $this->assertSame(63, $first->viewData('records')->total());
+        // Twenty-six teaching days across three registers.
+        $this->assertSame(78, $first->viewData('records')->total());
         $this->assertCount(25, $first->viewData('records'));
 
-        $last = $this->open($enrollment->student, $this->august(['attendance_period' => 'all', 'page' => 3]))->assertOk();
+        $last = $this->open($enrollment->student, $this->august(['attendance_period' => 'all', 'page' => 4]))->assertOk();
 
-        $this->assertCount(13, $last->viewData('records'));
-        $this->assertSame(3, $last->viewData('records')->currentPage());
+        $this->assertCount(3, $last->viewData('records'));
+        $this->assertSame(4, $last->viewData('records')->currentPage());
     }
 
     public function test_filters_survive_pagination(): void
@@ -687,7 +688,7 @@ class StudentAttendanceHistoryTest extends TestCase
         $records = $response->viewData('records');
 
         // Page two of the same filtered set, not an unfiltered page two.
-        $this->assertSame(63, $records->total());
+        $this->assertSame(78, $records->total());
         $this->assertSame(2, $records->currentPage());
         $this->assertCount(25, $records);
 
@@ -701,7 +702,7 @@ class StudentAttendanceHistoryTest extends TestCase
         // just the page being looked at.
         $morning = $this->open($enrollment->student, $this->august(['attendance_period' => 'Morning']))->viewData('records');
 
-        $this->assertSame(21, $morning->total());
+        $this->assertSame(26, $morning->total());
         $this->assertSame(['Morning'], $morning->pluck('attendance_period')->unique()->values()->all());
     }
 
@@ -716,11 +717,11 @@ class StudentAttendanceHistoryTest extends TestCase
         $large = $this->queriesToOpenTheHistory($enrollment->student);
 
         $this->assertSame(
-            63,
+            78,
             $this->open($enrollment->student, $this->august(['attendance_period' => 'all']))->viewData('records')->total()
         );
 
-        // Sixty-three records instead of one, and no extra queries: the
+        // Seventy-eight records instead of one, and no extra queries: the
         // enrollment and its master data are eager loaded, not fetched per
         // row.
         $this->assertLessThanOrEqual($small, $large);

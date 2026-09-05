@@ -45,7 +45,7 @@
                  joined in November is not marked down for September. --}}
             <p class="text-sm text-gray-500 mt-2">
                 Expected prayers are counted from each student's own Madrassa enrollment period inside the session,
-                excluding Saturdays and Sundays, at five prayers per working day. A prayer nobody has transcribed yet
+                excluding Sundays, at five prayers per working day. A prayer nobody has transcribed yet
                 is <span class="font-medium">Unrecorded</span>, never an absence, and percentages are Present over Recorded.
             </p>
         </div>

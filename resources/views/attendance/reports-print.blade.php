@@ -52,7 +52,7 @@
     </table>
 
     <p class="text-[10px] text-gray-600 mb-3">
-        Attendance percentage is Present divided by Recorded. Weekends, and days that have not been entered yet,
+        Attendance percentage is Present divided by Recorded. Sundays, and days that have not been entered yet,
         are not in the denominator. N/A means nothing has been recorded.
     </p>
 

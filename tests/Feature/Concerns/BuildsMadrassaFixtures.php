@@ -23,7 +23,7 @@ use Database\Seeders\AdmissionDepartmentClassSeeder;
  */
 trait BuildsMadrassaFixtures
 {
-    /** August 2026: Mondays fall on the 3rd, weekends on the 1st and 2nd. */
+    /** August 2026: the 1st is a Saturday (worked), the 2nd a Sunday (off). */
     protected const MONDAY = '2026-08-03';
 
     protected const TUESDAY = '2026-08-04';

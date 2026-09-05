@@ -168,6 +168,14 @@
                                     <option value="{{ $session->id }}">{{ $session->name }}</option>
                                 @endforeach
                             </select>
+                            {{-- Spelt out because the right answer differs by
+                                 track, and the session already running is the
+                                 one an Imam promoting a finished stage wants. --}}
+                            <p class="mt-1 text-sm text-gray-500">
+                                A madrassa stage can be completed part way through a session, so the session
+                                already running is a valid choice. A school class runs for the whole year, so
+                                the school track moves on to the next session.
+                            </p>
                             @error('academic_session_id')
                                 <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
                             @enderror

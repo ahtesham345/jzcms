@@ -17,12 +17,13 @@ use Illuminate\Support\Collection;
  * that day. Recorded is what has actually been transcribed. The gap between
  * them is the work still to do, and it is never treated as absence.
  *
- * A student appears once. Today the academic module already guarantees that,
- * because a unique index allows one enrollment per student per session per
- * track and a promotion therefore moves the student into the next session.
- * The windows are still merged before the days are counted, so that a
- * student who somehow holds two placements on one track is one row and the
- * day they change over is counted once rather than twice.
+ * A student appears once, however many placements they held. The school
+ * track allows one enrollment per session, so a school student has one. The
+ * madrassa does not: a stage finishes when the student finishes it, so a
+ * student promoted from Nazra to Hifz in July holds two placements in the
+ * one session. The windows are merged before the days are counted, so such
+ * a student is still one row and the day they change over is counted once
+ * rather than twice.
  *
  * The computation is shared by the page, the printout and the export, so
  * all three report the same figures.

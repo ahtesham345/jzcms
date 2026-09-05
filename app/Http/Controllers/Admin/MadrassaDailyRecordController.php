@@ -65,7 +65,7 @@ class MadrassaDailyRecordController extends Controller
     /** A date was chosen, but no class to draw the roster from. */
     private const ROSTER_NEEDS_CLASS = 'needs_class';
 
-    /** A Saturday or Sunday: the madrassa does not sit, so nothing is recorded. */
+    /** A Sunday: the madrassa does not sit, so nothing is recorded. */
     private const ROSTER_OFF_DAY = 'off_day';
 
     /** A working day and a class: the roster is drawn. */
@@ -327,7 +327,7 @@ class MadrassaDailyRecordController extends Controller
      *
      * Four answers, in the order the administrator meets them: nothing
      * chosen yet, a weekend, a day without a class to load, or a roster.
-     * The weekend is decided before the class because a Saturday has no
+     * The off day is decided before the class because a Sunday has no
      * roster whatever class is picked.
      */
     private function rosterState(Request $request): string

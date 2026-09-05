@@ -96,10 +96,22 @@ class PromoteStudentRequest extends FormRequest
                 Rule::exists('academic_sessions', 'id')->where('status', true),
 
                 // The same guard the enrollment form uses, and the same one
-                // the unique index enforces underneath.
-                Rule::unique('student_academic_enrollments', 'academic_session_id')
-                    ->where('student_id', $this->student()?->id)
-                    ->where('academic_track', $this->input('academic_track')),
+                // Student::promote() re-checks under the lock.
+                //
+                // School only. A school class runs for the academic year, so
+                // a student holds one school enrollment per session. The
+                // madrassa is promoted on completion instead: a student who
+                // finishes Nazra in July is promoted in July, into the
+                // session that is running, and applying this rule to that
+                // track is what forced the promotion to wait for the session
+                // to end.
+                ...(StudentAcademicEnrollment::trackIsSessionBound($this->input('academic_track'))
+                    ? [
+                        Rule::unique('student_academic_enrollments', 'academic_session_id')
+                            ->where('student_id', $this->student()?->id)
+                            ->where('academic_track', $this->input('academic_track')),
+                    ]
+                    : []),
             ],
 
             'department_id' => [

@@ -105,11 +105,11 @@ class StoreAttendanceSheetRequest extends FormRequest
                 'required',
                 'date_format:Y-m-d',
                 function ($attribute, $value, $fail) {
-                    // Saturday and Sunday are off for both tracks, so no row
-                    // may exist for them at all. The sheet renders them as
+                    // Sunday is the weekly off day for both tracks, so no
+                    // row may exist for it at all. The sheet renders it as
                     // OFF and unclickable; this is the rule that decides.
                     if ($offDay = StudentAttendance::offDayName($value)) {
-                        $fail("Attendance cannot be recorded on a {$offDay} ({$value}). Saturday and Sunday are off days.");
+                        $fail("Attendance cannot be recorded on a {$offDay} ({$value}). Sunday is the weekly off day.");
                     }
 
                     // The sheet may only write the month it was drawn for.

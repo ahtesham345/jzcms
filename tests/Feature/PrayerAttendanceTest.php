@@ -535,14 +535,17 @@ class PrayerAttendanceTest extends TestCase
     /* Weekends */
     /* ---------------------------------------------------------------- */
 
-    public function test_saturday_is_rejected(): void
+    public function test_saturday_is_accepted(): void
     {
         $enrollment = $this->madrassaEnrollment($this->student('Ahtesham Shakeel'));
 
         $this->save([$this->cell($enrollment, self::SATURDAY)])
-            ->assertSessionHasErrors('prayers.0.attendance_date');
+            ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('student_prayer_attendances', 0);
+        $this->assertDatabaseHas('student_prayer_attendances', [
+            'student_academic_enrollment_id' => $enrollment->id,
+            'attendance_date' => self::SATURDAY,
+        ]);
     }
 
     public function test_sunday_is_rejected(): void
@@ -555,7 +558,7 @@ class PrayerAttendanceTest extends TestCase
         $this->assertDatabaseCount('student_prayer_attendances', 0);
     }
 
-    public function test_the_sheet_marks_weekends_off_and_gives_them_no_cells(): void
+    public function test_the_sheet_marks_the_off_day_and_gives_it_no_cells(): void
     {
         $enrollment = $this->madrassaEnrollment($this->student('Ahtesham Shakeel'));
 
@@ -566,15 +569,15 @@ class PrayerAttendanceTest extends TestCase
 
         $cells = $response->viewData('initialCells');
 
-        // No cell exists for a weekend, so there is nothing to click and
-        // nothing that could be submitted.
+        // No cell exists for a Sunday, so there is nothing to click and
+        // nothing that could be submitted. Saturday is offered in full.
         foreach (StudentPrayerAttendance::PRAYERS as $prayer) {
             $this->assertArrayNotHasKey(
-                StudentPrayerAttendance::cellKey($enrollment->id, self::SATURDAY, $prayer),
+                StudentPrayerAttendance::cellKey($enrollment->id, self::SUNDAY, $prayer),
                 $cells
             );
-            $this->assertArrayNotHasKey(
-                StudentPrayerAttendance::cellKey($enrollment->id, self::SUNDAY, $prayer),
+            $this->assertArrayHasKey(
+                StudentPrayerAttendance::cellKey($enrollment->id, self::SATURDAY, $prayer),
                 $cells
             );
         }
@@ -944,11 +947,11 @@ class PrayerAttendanceTest extends TestCase
             }
         }
 
-        // Twenty-one working days times five prayers.
-        $this->assertCount(105, $rows);
+        // Twenty-six working days times five prayers.
+        $this->assertCount(130, $rows);
 
         $this->save($rows)->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('student_prayer_attendances', 105);
+        $this->assertDatabaseCount('student_prayer_attendances', 130);
     }
 }

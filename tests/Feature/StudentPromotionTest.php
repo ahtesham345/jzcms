@@ -11,6 +11,7 @@ use App\Models\StudentAcademicEnrollment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class StudentPromotionTest extends TestCase
@@ -484,34 +485,112 @@ class StudentPromotionTest extends TestCase
         $this->assertNothingChanged($student);
     }
 
-    public function test_a_duplicate_session_and_track_is_rejected(): void
+    /**
+     * One enrollment per session, on the school track.
+     *
+     * This test used to be written against the madrassa track, when the rule
+     * covered both. It does not: a school class runs for the academic year,
+     * a madrassa stage finishes when the student finishes it. The rule and
+     * its assertions are kept here on the track they belong to; the madrassa
+     * side is covered by MadrassaStagePromotionTest.
+     */
+    public function test_a_duplicate_session_and_track_is_rejected_on_the_school_track(): void
     {
-        $student = $this->enrolledStudent();
+        $student = $this->student(['student_type' => 'School']);
+
+        $this->enroll($student, [
+            'academic_track' => 'School',
+            'department_id' => $this->school->id,
+            'academic_class_id' => $this->fifth->id,
+            'section_id' => $this->fifthA->id,
+        ]);
 
         // A completed enrollment already occupies 2027 on this track.
         $this->enroll($student, [
+            'academic_track' => 'School',
             'academic_session_id' => $this->session2027->id,
-            'academic_class_id' => $this->hifzClass->id,
+            'department_id' => $this->school->id,
+            'academic_class_id' => $this->sixth->id,
             'section_id' => null,
             'status' => 'Completed',
             'start_date' => '2027-04-01',
             'end_date' => '2027-06-01',
         ]);
 
-        $this->promote($student)->assertSessionHasErrors('academic_session_id');
+        $this->promote($student, [
+            'academic_track' => 'School',
+            'department_id' => $this->school->id,
+            'academic_class_id' => $this->sixth->id,
+            'section_id' => null,
+        ])->assertSessionHasErrors('academic_session_id');
 
         $this->assertSame(2, $student->academicEnrollments()->count());
-        $this->assertSame('Active', $student->activeEnrollmentForTrack('Madrassa')->status);
+        $this->assertSame('Active', $student->activeEnrollmentForTrack('School')->status);
     }
 
-    public function test_the_unique_constraint_still_guards_the_table(): void
+    /**
+     * The school rule survives without the unique index.
+     *
+     * The index that used to be the last line of defence covered both
+     * tracks, so it could not stay once the madrassa was allowed more than
+     * one enrollment per session. What it enforced for the school is now
+     * re-checked inside Student::promote(), under a row lock and inside the
+     * promotion transaction, so going straight past the form request still
+     * cannot produce two school enrollments in one session.
+     */
+    public function test_the_school_rule_is_still_enforced_below_the_form(): void
+    {
+        $student = $this->student(['student_type' => 'School']);
+
+        $this->enroll($student, [
+            'academic_track' => 'School',
+            'department_id' => $this->school->id,
+            'academic_class_id' => $this->fifth->id,
+            'section_id' => $this->fifthA->id,
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        try {
+            $student->promote([
+                'academic_track' => 'School',
+                'academic_session_id' => $this->session2026->id,
+                'department_id' => $this->school->id,
+                'academic_class_id' => $this->sixth->id,
+                'promotion_date' => '2026-07-15',
+            ]);
+        } finally {
+            $this->assertSame(1, $student->academicEnrollments()->count());
+            $this->assertSame('Active', $student->activeEnrollmentForTrack('School')->status);
+        }
+    }
+
+    /**
+     * The madrassa side of the same rule, now that it no longer applies.
+     *
+     * Straight to the table, which is where the unique index used to refuse
+     * this: a stage completed part way through a session leaves two rows for
+     * that session, and that is the behaviour the module needs.
+     */
+    public function test_the_madrassa_track_may_hold_two_enrollments_in_one_session(): void
     {
         $student = $this->enrolledStudent();
 
-        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+        $this->enroll($student, [
+            'academic_class_id' => $this->hifzClass->id,
+            'section_id' => null,
+            'status' => 'Completed',
+            'start_date' => '2026-07-15',
+            'end_date' => '2026-10-20',
+        ]);
 
-        // Straight past validation and the model.
-        $this->enroll($student, ['status' => 'Completed']);
+        $enrollments = $student->academicEnrollments()->get();
+
+        $this->assertCount(2, $enrollments);
+        $this->assertSame(
+            [$this->session2026->id, $this->session2026->id],
+            $enrollments->pluck('academic_session_id')->all()
+        );
     }
 
     public function test_a_promotion_date_before_the_current_enrollment_is_rejected(): void

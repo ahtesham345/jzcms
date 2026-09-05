@@ -323,7 +323,7 @@
                             >
                                 <option value="">Select academic session</option>
                                 @foreach($academicSessions as $session)
-                                    <option value="{{ $session->id }}" {{ old('academic_session_id') == $session->id ? 'selected' : '' }}>
+                                    <option value="{{ $session->id }}" {{ old('academic_session_id', $currentSessionId) == $session->id ? 'selected' : '' }}>
                                         {{ $session->name }}
                                     </option>
                                 @endforeach
@@ -333,71 +333,15 @@
                             @enderror
                         </div>
 
-                        <!-- Department -->
-                        <div>
-                            <label for="department_id" class="block text-sm font-medium text-gray-700 mb-2">
-                                Department <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="department_id" 
-                                id="department_id"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('department_id') border-red-500 @enderror"
-                            >
-                                <option value="">Select department</option>
-                                @foreach($departments as $department)
-                                    <option value="{{ $department->id }}" {{ old('department_id') == $department->id ? 'selected' : '' }}>
-                                        {{ $department->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('department_id')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Academic Class -->
-                        <div>
-                            <label for="academic_class_id" class="block text-sm font-medium text-gray-700 mb-2">
-                                Academic Class <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="academic_class_id" 
-                                id="academic_class_id"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('academic_class_id') border-red-500 @enderror"
-                            >
-                                <option value="">Select academic class</option>
-                                @foreach($academicClasses as $class)
-                                    <option value="{{ $class->id }}" {{ old('academic_class_id') == $class->id ? 'selected' : '' }}>
-                                        {{ $class->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('academic_class_id')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Section -->
-                        <div>
-                            <label for="section_id" class="block text-sm font-medium text-gray-700 mb-2">
-                                Section <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="section_id" 
-                                id="section_id"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('section_id') border-red-500 @enderror"
-                            >
-                                <option value="">Select section</option>
-                                @foreach($sections as $section)
-                                    <option value="{{ $section->id }}" {{ old('section_id') == $section->id ? 'selected' : '' }}>
-                                        {{ $section->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('section_id')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
+                        <x-student-placement-fields
+                            :student="null"
+                            :placement-by-track="null"
+                            :student-types="$studentTypes"
+                            :department-names-by-id="$departmentNamesById"
+                            :department-ids-by-student-type="$departmentIdsByStudentType"
+                            :classes-by-department="$classesByDepartment"
+                            :sections-by-class="$sectionsByClass"
+                        />
 
                         <!-- Student Status -->
                         <div>
@@ -419,28 +363,6 @@
                             @enderror
                         </div>
 
-                        <!-- Student Type -->
-                        <div>
-                            <label for="student_type" class="block text-sm font-medium text-gray-700 mb-2">
-                                Student Type <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="student_type" 
-                                id="student_type"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('student_type') border-red-500 @enderror"
-                            >
-                                <option value="">Select type</option>
-                                <option value="Hifz" {{ old('student_type') == 'Hifz' ? 'selected' : '' }}>Hifz</option>
-                                <option value="Hifz + School" {{ old('student_type') == 'Hifz + School' ? 'selected' : '' }}>Hifz + School</option>
-                                <option value="School" {{ old('student_type') == 'School' ? 'selected' : '' }}>School</option>
-                                <option value="Dars-e-Nizami + Computer" {{ old('student_type') == 'Dars-e-Nizami + Computer' ? 'selected' : '' }}>Dars-e-Nizami + Computer</option>
-                                <option value="Dars-e-Nizami" {{ old('student_type') == 'Dars-e-Nizami' ? 'selected' : '' }}>Dars-e-Nizami</option>
-                            </select>
-                            @error('student_type')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
                         <!-- Resident Type -->
                         <div>
                             <label for="resident_type" class="block text-sm font-medium text-gray-700 mb-2">
@@ -456,6 +378,79 @@
                                 <option value="Outside Resident" {{ old('resident_type') == 'Outside Resident' ? 'selected' : '' }}>Outside Resident</option>
                             </select>
                             @error('resident_type')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parent / Guardian Section -->
+                <div class="space-y-6" x-data="{ parentId: '{{ old('parent_id') }}' }">
+                    <h4 class="text-md font-semibold text-gray-700 border-b pb-2">Parent / Guardian</h4>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Existing parent -->
+                        <div>
+                            <label for="parent_id" class="block text-sm font-medium text-gray-700 mb-2">
+                                Link an Existing Parent
+                            </label>
+                            <select
+                                name="parent_id"
+                                id="parent_id"
+                                x-model="parentId"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('parent_id') border-red-500 @enderror"
+                            >
+                                <option value="">None - record the father from the details above</option>
+                                @foreach($linkableParents as $linkableParent)
+                                    <option value="{{ $linkableParent->id }}" {{ old('parent_id') == $linkableParent->id ? 'selected' : '' }}>
+                                        {{ $linkableParent->full_name }} ({{ $linkableParent->parent_id }})
+                                    </option>
+                                @endforeach
+                            </select>
+                            <p class="mt-1 text-sm text-gray-500">
+                                Leave this as None and a father record is created from the father's name and mobile,
+                                exactly as approving an admission does.
+                            </p>
+                            @error('parent_id')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Relationship -->
+                        <div x-show="parentId" x-cloak>
+                            <label for="parent_relationship_type" class="block text-sm font-medium text-gray-700 mb-2">
+                                Relationship <span class="text-red-500">*</span>
+                            </label>
+                            <select
+                                name="parent_relationship_type"
+                                id="parent_relationship_type"
+                                :disabled="! parentId"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 @error('parent_relationship_type') border-red-500 @enderror"
+                            >
+                                @foreach($relationshipTypes as $type)
+                                    <option value="{{ $type }}" {{ old('parent_relationship_type', 'Father') === $type ? 'selected' : '' }}>{{ $type }}</option>
+                                @endforeach
+                            </select>
+                            @error('parent_relationship_type')
+                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <!-- Primary contact -->
+                        <div x-show="parentId" x-cloak class="flex items-end">
+                            <label for="parent_is_primary" class="inline-flex items-center">
+                                <input
+                                    type="checkbox"
+                                    name="parent_is_primary"
+                                    id="parent_is_primary"
+                                    value="1"
+                                    :disabled="! parentId"
+                                    {{ old('parent_is_primary') ? 'checked' : '' }}
+                                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                >
+                                <span class="ml-2 text-sm text-gray-700">Primary contact for this relationship</span>
+                            </label>
+                            @error('parent_is_primary')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
                         </div>

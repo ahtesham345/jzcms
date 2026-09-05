@@ -27,7 +27,12 @@ class StudentAcademicEnrollmentController extends Controller
     {
         $studentRecord = Student::findOrFail($student);
 
-        $studentRecord->academicEnrollments()->create($request->validated());
+        // Through the model rather than straight onto the relation: the
+        // "one enrollment per session" rule the school track carries is
+        // re-checked there under a row lock, inside the transaction that
+        // writes the row. The form request checked it too, but outside any
+        // transaction, so two submissions at once could both pass it.
+        $studentRecord->addEnrollment($request->validated());
 
         return redirect()
             ->route('students.show', $studentRecord->id)

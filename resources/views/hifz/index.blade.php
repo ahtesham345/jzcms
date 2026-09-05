@@ -276,7 +276,7 @@
                 </div>
 
                 @if($rosterState === 'off_day')
-                    {{-- Saturday and Sunday are off across the institution, so
+                    {{-- Sunday is off across the institution, so
                          there is no day's work to record. The save refuses the
                          date too; this is where the admin finds out first, and
                          nothing is queried or written in the meantime. --}}
@@ -286,7 +286,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                             </svg>
                         </div>
-                        <h4 class="mt-3 text-base font-semibold text-gray-900">Weekend / Off Day</h4>
+                        <h4 class="mt-3 text-base font-semibold text-gray-900">Weekly Off Day</h4>
                         <p class="mt-1 text-sm text-gray-600">
                             {{ $rosterHeading['offDay'] }} is an off day. No daily record can be created for this date.
                         </p>

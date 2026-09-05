@@ -112,7 +112,7 @@
                 <input type="date" name="record_date" id="record_date" required
                        value="{{ old('record_date', $record?->record_date?->format('Y-m-d') ?? $recordDate) }}"
                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <p class="mt-1 text-sm text-gray-500">Saturday and Sunday are off days and cannot be recorded.</p>
+                <p class="mt-1 text-sm text-gray-500">Sunday is the weekly off day and cannot be recorded.</p>
                 <x-input-error :messages="$errors->get('record_date')" class="mt-2" />
             </div>
 

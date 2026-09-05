@@ -167,6 +167,55 @@ class ParentGuardian extends Model
     }
 
     /**
+     * Create a basic father record for a student and link it to them.
+     *
+     * A new record every time, deliberately. No existing parent is searched
+     * for or reused: one father may give a different mobile number for each
+     * child, so a number identifies nobody reliably, and a wrong reuse
+     * silently attaches a child to the wrong family. Two records for one man
+     * is the safer failure, and the admin resolves it from Parent Management
+     * by completing the right record (CNIC and the rest) and relinking by
+     * hand. Automatic merging and duplicate detection are out of scope.
+     *
+     * Nothing is invented: only the father's name and mobile as recorded on
+     * the student, which is all either flow knows about him. A student
+     * missing either one is left without a parent rather than given an
+     * incomplete record; the admin links one by hand afterwards.
+     *
+     * The mother is deliberately not handled: a student carries a
+     * mother_mobile but no mother name, and a parent record will not be
+     * built from a number alone.
+     *
+     * Shared by the admission approval and by manual student creation, so
+     * both produce the same father record and the same link. Callers run it
+     * inside their own transaction, which rolls this back with everything
+     * else should the rest of the creation fail.
+     */
+    public static function createFatherFor(Student $student): ?self
+    {
+        $name = trim((string) $student->father_name);
+        $mobile = trim((string) $student->father_mobile);
+
+        // A parent record needs at least a name and a mobile to satisfy the
+        // rules the Parent forms enforce.
+        if ($name === '' || $mobile === '') {
+            return null;
+        }
+
+        $parent = self::createWithParentId([
+            'full_name' => $name,
+            'mobile_number' => $mobile,
+            // The link being created is Father, so the record is a man's.
+            'gender' => 'Male',
+            'parent_status' => 'Active',
+        ]);
+
+        $parent->linkStudent($student->id, 'Father', true);
+
+        return $parent;
+    }
+
+    /**
      * Link a student to this parent.
      *
      * The read and the insert share one transaction, and the student's

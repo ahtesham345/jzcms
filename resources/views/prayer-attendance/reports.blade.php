@@ -59,7 +59,7 @@
                  rather than only in the code. --}}
             <p class="text-sm text-gray-500 mt-2">
                 {{ $workingDays }} working days &times; 5 prayers = {{ $expectedPerStudent }} expected prayers per student.
-                Saturdays and Sundays are excluded. A prayer nobody has transcribed yet is
+                Sundays are excluded. A prayer nobody has transcribed yet is
                 <span class="font-medium">Unrecorded</span>, never an absence, and percentages are
                 Present over Recorded.
             </p>

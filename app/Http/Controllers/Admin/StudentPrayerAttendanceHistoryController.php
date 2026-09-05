@@ -177,8 +177,8 @@ class StudentPrayerAttendanceHistoryController extends Controller
      * would show the other four as zero, which reads as "no Zuhr records
      * exist" rather than "Zuhr is filtered out of the table below".
      *
-     * Weekends need no exclusion here: no row exists for a Saturday or
-     * Sunday, so they cannot be counted as anything. Unmarked prayers are
+     * The off day needs no exclusion here: no row exists for a Sunday, so
+     * it cannot be counted as anything. Unmarked prayers are
      * likewise absent rather than counted, which is what keeps a day nobody
      * has transcribed from becoming a judgement about the student.
      *
@@ -267,7 +267,7 @@ class StudentPrayerAttendanceHistoryController extends Controller
      * Build the month at a glance: one row per day, five prayers across.
      *
      * Reading only. A cell is Present or Absent when a record says so, OFF
-     * on a Saturday or Sunday, and unmarked otherwise - and unmarked means
+     * on a Sunday, and unmarked otherwise - and unmarked means
      * exactly that no row exists, never that the student was away. Drawing
      * this grid writes nothing.
      *

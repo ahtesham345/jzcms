@@ -259,7 +259,7 @@
 
                 <p class="text-sm text-gray-500 mt-3">
                     Attendance percentage is Present divided by Recorded, so attendance that has not been transcribed
-                    yet does not count against a student. Weekends are never an opportunity.
+                    yet does not count against a student. Sundays are never an opportunity.
                 </p>
             </div>
 

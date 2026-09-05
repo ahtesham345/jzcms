@@ -69,6 +69,9 @@ class AttendanceController extends Controller
             'filters' => $filters,
             'availablePeriods' => $availablePeriods,
             'academicTracks' => StudentAcademicEnrollment::ACADEMIC_TRACKS,
+            // Suggestions for the reason dialog. The reason itself is free
+            // text, so these narrow nothing: they only save typing.
+            'absenceReasons' => StudentAttendance::ABSENCE_REASONS,
             'years' => $this->selectableYears(),
             'months' => $this->selectableMonths(),
             'monthLabel' => Carbon::create($filters['year'], $filters['month'], 1)->format('F Y'),

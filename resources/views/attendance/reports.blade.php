@@ -307,7 +307,7 @@
             </div>
 
             <p class="text-sm text-gray-500 mt-3">
-                Attendance percentage is Present divided by Recorded. Weekends, and days nobody has entered yet,
+                Attendance percentage is Present divided by Recorded. Sundays, and days nobody has entered yet,
                 are not in the denominator.
             </p>
         </div>

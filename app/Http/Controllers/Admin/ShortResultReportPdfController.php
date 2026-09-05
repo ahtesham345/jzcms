@@ -204,13 +204,9 @@ class ShortResultReportPdfController extends Controller
             // The boundary, applied before anything the browser sent. There
             // is no track filter on this report and nothing here reads one.
             ->where('student_academic_enrollments.academic_track', StudentResult::ACADEMIC_TRACK)
-            ->where(function ($query) use ($terms) {
-                $query->where('student_academic_enrollments.status', 'Active')
-                    ->orWhereHas('studentResults', function ($result) use ($terms) {
-                        $result->whereIn('term', $terms)
-                            ->where('test_type', StudentResult::TEST_GRAND);
-                    });
-            })
+            // The same scope the on-screen report is drawn from, so the two
+            // list exactly the same placements.
+            ->forResultReport($terms)
             ->when($session, fn ($query) => $query->where('student_academic_enrollments.academic_session_id', $session->id))
             ->when($filters['department_id'], fn ($query, $value) => $query->where('student_academic_enrollments.department_id', $value))
             ->when($filters['academic_class_id'], fn ($query, $value) => $query->where('student_academic_enrollments.academic_class_id', $value))

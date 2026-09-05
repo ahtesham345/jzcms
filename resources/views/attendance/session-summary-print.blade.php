@@ -73,7 +73,7 @@
     <p class="text-[10px] text-gray-600 mb-3">
         Attendance Opportunities is what the registers could hold across every student in this group; Recorded is what
         has been transcribed. Attendance percentage is Present divided by Recorded, so untranscribed attendance is not
-        counted against a student. Saturdays and Sundays are never an opportunity. N/A means nothing has been recorded.
+        counted against a student. Sundays are never an opportunity. N/A means nothing has been recorded.
     </p>
 
     <!-- Students -->

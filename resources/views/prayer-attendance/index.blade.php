@@ -18,7 +18,7 @@
                 <h2 class="text-xl font-semibold text-gray-800">Monthly Prayer Attendance Entry</h2>
                 <p class="text-sm text-gray-600 mt-1">
                     Fajr, Zuhr, Asr, Maghrib and Isha for Madrassa students. Choose a class and a month, then
-                    transcribe the paper prayer register for that month. Saturday and Sunday are off days.
+                    transcribe the paper prayer register for that month. Sunday is the weekly off day.
                 </p>
                 {{-- Said on the page, not only in the code: two registers,
                      kept separately, neither one derived from the other. --}}

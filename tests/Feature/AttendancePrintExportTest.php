@@ -27,7 +27,7 @@ class AttendancePrintExportTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** August 2026: the 1st and 2nd are the weekend, the 3rd a Monday. */
+    /** August 2026: the 1st is a Saturday (worked), the 2nd a Sunday (off). */
     private const MONDAY = '2026-08-03';
 
     private const TUESDAY = '2026-08-04';
@@ -35,6 +35,8 @@ class AttendancePrintExportTest extends TestCase
     private const WEDNESDAY = '2026-08-05';
 
     private const SATURDAY = '2026-08-01';
+
+    private const SUNDAY = '2026-08-02';
 
     private AcademicSession $session;
 
@@ -300,14 +302,14 @@ class AttendancePrintExportTest extends TestCase
 
         $this->assertSame('Morning', $response->viewData('filters')['attendance_period']);
 
-        // Present prints as P, absent as A, and the twenty-one teaching days
-        // of August leave nineteen cells blank because nobody entered them.
+        // Present prints as P, absent as A, and the twenty-six teaching days
+        // of August leave twenty-four cells blank because nobody entered them.
         $marks = $this->printedMarks($response->getContent());
 
-        $this->assertSame(21, count($marks));
+        $this->assertSame(26, count($marks));
         $this->assertSame(1, count(array_filter($marks, fn ($mark) => $mark === 'P')));
         $this->assertSame(1, count(array_filter($marks, fn ($mark) => $mark === 'A')));
-        $this->assertSame(19, count(array_filter($marks, fn ($mark) => $mark === '')));
+        $this->assertSame(24, count(array_filter($marks, fn ($mark) => $mark === '')));
 
         $response->assertSee('P = Present');
     }
@@ -360,18 +362,19 @@ class AttendancePrintExportTest extends TestCase
         $response->assertDontSee('<th class="border border-gray-400 px-1 py-1 text-left">Evening</th>', false);
     }
 
-    public function test_weekend_columns_print_as_off(): void
+    public function test_sunday_columns_print_as_off_and_saturdays_do_not(): void
     {
         $this->madrassaEnrollment($this->student('Ahmed Ali'));
 
         $response = $this->printSheet()->assertOk();
 
-        // August 2026 holds ten weekend days.
+        // August 2026 holds five Sundays; its Saturdays are worked.
         $days = collect($response->viewData('days'))->keyBy('date');
-        $this->assertTrue($days[self::SATURDAY]['is_off_day']);
+        $this->assertTrue($days[self::SUNDAY]['is_off_day']);
+        $this->assertFalse($days[self::SATURDAY]['is_off_day']);
 
-        // One OFF per weekend day in the header row plus one per student row.
-        $this->assertSame(10, substr_count($response->getContent(), '>OFF</td>'));
+        // One OFF per Sunday in the single student row.
+        $this->assertSame(5, substr_count($response->getContent(), '>OFF</td>'));
     }
 
     public function test_the_printed_sheet_renders_the_right_number_of_day_columns(): void
@@ -483,8 +486,8 @@ class AttendancePrintExportTest extends TestCase
             'year' => 2026,
         ]))->assertOk()->viewData('records');
 
-        // Twenty-one teaching days across two registers.
-        $this->assertCount(42, $records);
+        // Twenty-six teaching days across two registers.
+        $this->assertCount(52, $records);
     }
 
     public function test_a_present_record_prints_no_absence_reason(): void

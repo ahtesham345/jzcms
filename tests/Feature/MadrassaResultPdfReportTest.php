@@ -457,24 +457,40 @@ class MadrassaResultPdfReportTest extends TestCase
         $this->assertSame(StudentPrayerAttendance::STATUS_UNMARKED, $monday['prayers']['Isha']);
     }
 
-    public function test_a_weekend_prayer_row_is_reported_as_off(): void
+    public function test_an_off_day_prayer_row_is_reported_as_off(): void
     {
         $student = $this->student('Hamza Iqbal');
         $enrollment = $this->madrassaEnrollment($student);
 
-        // 2026-09-05 is a Saturday. The entry sheet refuses one, but a row
-        // reaching the table by any other route must still not read as an
-        // absence on a report.
+        // 2026-09-06 is a Sunday, the weekly off day. The entry sheet
+        // refuses one, but a row reaching the table by any other route must
+        // still not read as an absence on a report.
+        $this->prayer($enrollment, '2026-09-06', 'Fajr', StudentPrayerAttendance::STATUS_ABSENT);
+
+        $day = collect((new MadrassaStudentReport($student, $this->session))->prayerHistory())
+            ->firstWhere(fn ($row) => $row['date']->format('Y-m-d') === '2026-09-06');
+
+        $this->assertSame('Sunday', $day['off_day']);
+
+        foreach ($day['prayers'] as $status) {
+            $this->assertSame('OFF', $status);
+        }
+    }
+
+    public function test_a_saturday_prayer_row_is_reported_normally(): void
+    {
+        $student = $this->student('Hamza Iqbal');
+        $enrollment = $this->madrassaEnrollment($student);
+
+        // 2026-09-05 is a Saturday, and Saturday is now a working day: the
+        // mark stands as recorded rather than being blanked out as OFF.
         $this->prayer($enrollment, '2026-09-05', 'Fajr', StudentPrayerAttendance::STATUS_ABSENT);
 
         $day = collect((new MadrassaStudentReport($student, $this->session))->prayerHistory())
             ->firstWhere(fn ($row) => $row['date']->format('Y-m-d') === '2026-09-05');
 
-        $this->assertSame('Saturday', $day['off_day']);
-
-        foreach ($day['prayers'] as $status) {
-            $this->assertSame('OFF', $status);
-        }
+        $this->assertNull($day['off_day']);
+        $this->assertSame(StudentPrayerAttendance::STATUS_ABSENT, $day['prayers']['Fajr']);
     }
 
     /* ---------------------------------------------------------------- */

@@ -432,7 +432,7 @@ class MadrassaDailyRecordTest extends TestCase
         $this->assertDatabaseCount('madrassa_daily_records', 2);
     }
 
-    public function test_a_saturday_is_rejected(): void
+    public function test_a_saturday_is_accepted(): void
     {
         $enrollment = $this->madrassaEnrollment();
 
@@ -440,8 +440,11 @@ class MadrassaDailyRecordTest extends TestCase
             'record_date' => self::SATURDAY,
         ]));
 
-        $response->assertSessionHasErrors('record_date');
-        $this->assertDatabaseCount('madrassa_daily_records', 0);
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('madrassa_daily_records', [
+            'student_academic_enrollment_id' => $enrollment->id,
+            'record_date' => self::SATURDAY,
+        ]);
     }
 
     public function test_a_sunday_is_rejected(): void
@@ -698,14 +701,27 @@ class MadrassaDailyRecordTest extends TestCase
         $response->assertDontSee('Usman Tariq');
     }
 
-    public function test_the_roster_refuses_a_weekend(): void
+    public function test_the_roster_refuses_the_weekly_off_day(): void
     {
         $madrassa = $this->madrassaEnrollment();
 
         $this->get(route('hifz.index', [
+            'record_date' => self::SUNDAY,
+            'academic_class_id' => $madrassa->academic_class_id,
+        ]))->assertOk()->assertSee('Sunday is an off day');
+    }
+
+    public function test_the_roster_loads_on_a_saturday(): void
+    {
+        $madrassa = $this->madrassaEnrollment();
+
+        $response = $this->get(route('hifz.index', [
             'record_date' => self::SATURDAY,
             'academic_class_id' => $madrassa->academic_class_id,
-        ]))->assertOk()->assertSee('Saturday is an off day');
+        ]))->assertOk();
+
+        $response->assertDontSee('is an off day');
+        $this->assertNotNull($response->viewData('roster'));
     }
 
     public function test_the_roster_leaves_out_students_whose_enrollment_has_ended(): void

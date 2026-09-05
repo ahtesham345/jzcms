@@ -37,7 +37,7 @@
     </table>
 
     <p class="text-[10px] text-gray-600 mb-2">
-        P = Present &nbsp;&middot;&nbsp; A = Absent &nbsp;&middot;&nbsp; OFF = weekend, no attendance is taken
+        P = Present &nbsp;&middot;&nbsp; A = Absent &nbsp;&middot;&nbsp; OFF = Sunday, no attendance is taken
         &nbsp;&middot;&nbsp; blank = not yet entered
     </p>
 

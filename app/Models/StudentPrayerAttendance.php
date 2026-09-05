@@ -304,7 +304,7 @@ class StudentPrayerAttendance extends Model
     /**
      * Determine whether a date is a day prayers are recorded on.
      *
-     * Saturday and Sunday are off across the institution. The rule is read
+     * Sunday is the weekly off day across the institution. The rule is read
      * from StudentAttendance rather than restated here: the madrassa runs
      * one weekend, and two copies of that definition would eventually
      * disagree. Nothing about a student's academic attendance is read -
@@ -356,9 +356,9 @@ class StudentPrayerAttendance extends Model
     /**
      * Count the prayers a month has room for, per student.
      *
-     * Five a day on every working day. Weekends are excluded before the
-     * multiplication, so a Saturday is never an opportunity the student
-     * failed to take - the madrassa simply does not sit.
+     * Five a day on every working day. The weekly off day is excluded
+     * before the multiplication, so a Sunday is never an opportunity the
+     * student failed to take - the madrassa simply does not sit.
      */
     public static function expectedPrayersInMonth(int $year, int $month): int
     {

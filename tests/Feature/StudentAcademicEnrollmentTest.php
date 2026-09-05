@@ -11,6 +11,7 @@ use App\Models\StudentAcademicEnrollment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class StudentAcademicEnrollmentTest extends TestCase
@@ -106,6 +107,22 @@ class StudentAcademicEnrollmentTest extends TestCase
             'start_date' => '2026-04-01',
             'status' => 'Active',
             'notes' => 'Started in Nazra.',
+        ], $overrides);
+    }
+
+    /**
+     * A school placement, for the rules that apply to that track only.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function schoolPlacement(array $overrides = []): array
+    {
+        return array_merge([
+            'academic_track' => 'School',
+            'department_id' => $this->school->id,
+            'academic_class_id' => $this->ninth->id,
+            'section_id' => null,
         ], $overrides);
     }
 
@@ -412,33 +429,182 @@ class StudentAcademicEnrollmentTest extends TestCase
         $this->assertSame(2, StudentAcademicEnrollment::count());
     }
 
-    public function test_a_duplicate_session_and_track_is_rejected(): void
+    /**
+     * One enrollment per session, on the school track.
+     *
+     * Written against the madrassa track when the rule covered both. It
+     * belongs to the school: a school class runs for the academic year,
+     * while a madrassa stage finishes whenever the student finishes it.
+     */
+    public function test_a_duplicate_session_and_track_is_rejected_on_the_school_track(): void
     {
-        $student = $this->student();
-        $this->enroll($student, ['status' => 'Completed', 'end_date' => '2027-01-01'])
-            ->assertSessionHasNoErrors();
+        $student = $this->student(['student_type' => 'School']);
+
+        $this->enroll($student, $this->schoolPlacement([
+            'status' => 'Completed',
+            'end_date' => '2027-01-01',
+        ]))->assertSessionHasNoErrors();
 
         // Same student, same session, same track.
-        $this->enroll($student, [
-            'academic_class_id' => $this->hifzClass->id,
-            'section_id' => null,
-            'status' => 'Active',
-        ])->assertSessionHasErrors('academic_session_id');
+        $this->enroll($student, $this->schoolPlacement(['status' => 'Active']))
+            ->assertSessionHasErrors('academic_session_id');
 
         $this->assertSame(1, StudentAcademicEnrollment::count());
     }
 
-    public function test_the_unique_index_is_the_final_guard(): void
+    /**
+     * The madrassa may hold several enrollments inside one session.
+     *
+     * What the unique index used to refuse, and the reason a madrassa
+     * promotion had to wait for the session to end. One stage is completed
+     * in July and the next starts the same day, both in the running session.
+     */
+    public function test_the_madrassa_track_may_hold_two_enrollments_in_one_session(): void
     {
         $student = $this->student();
-        $this->enroll($student)->assertSessionHasNoErrors();
 
-        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+        $this->enroll($student, ['status' => 'Completed', 'end_date' => '2026-07-15'])
+            ->assertSessionHasNoErrors();
 
-        StudentAcademicEnrollment::create($this->payload([
-            'student_id' => $student->id,
-            'status' => 'Completed',
+        $this->enroll($student, [
+            'academic_class_id' => $this->hifzClass->id,
+            'section_id' => null,
+            'start_date' => '2026-07-15',
+            'status' => 'Active',
+        ])->assertSessionHasNoErrors();
+
+        $enrollments = $student->fresh()->academicEnrollments;
+
+        $this->assertCount(2, $enrollments);
+        $this->assertSame(
+            [$this->session->id, $this->session->id],
+            $enrollments->pluck('academic_session_id')->all()
+        );
+
+        // Still only one of them is the current placement.
+        $this->assertCount(1, $student->fresh()->activeAcademicEnrollments);
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* The school rule below the form request                           */
+    /* ---------------------------------------------------------------- */
+
+    /**
+     * The school rule holds when the form request is bypassed entirely.
+     *
+     * The form request checks it too, but with a plain SELECT, outside any
+     * transaction and against an earlier moment - two submissions arriving
+     * together could both pass it. The database no longer backstops that,
+     * because the unique index had to go for the madrassa. So the guard was
+     * moved into Student::addEnrollment(), which re-reads under a row lock
+     * inside the transaction that writes the row. Calling it directly is
+     * what proves the persistence layer refuses on its own.
+     *
+     * A genuinely concurrent test is not written here: the suite runs on an
+     * in-memory SQLite database on a single connection, where lockForUpdate()
+     * is a no-op and two real transactions cannot overlap. Such a test would
+     * pass whatever the code did, which is worse than no test. What is
+     * asserted instead is the thing the lock protects - that the check and
+     * the insert are one atomic step in the model, not two in a controller.
+     */
+    public function test_the_school_rule_is_enforced_when_the_form_request_is_bypassed(): void
+    {
+        $student = $this->student(['student_type' => 'School']);
+
+        $student->addEnrollment($this->schoolPlacement([
+            'academic_session_id' => $this->session->id,
+            'start_date' => '2026-04-01',
+            'status' => 'Active',
         ]));
+
+        $this->assertSame(1, StudentAcademicEnrollment::count());
+
+        try {
+            $student->addEnrollment($this->schoolPlacement([
+                'academic_session_id' => $this->session->id,
+                'academic_class_id' => $this->hifzClass->id,
+                'start_date' => '2026-09-01',
+                'status' => 'Completed',
+                'end_date' => '2027-01-01',
+            ]));
+
+            $this->fail('A second school enrollment in one session should have been refused.');
+        } catch (ValidationException $e) {
+            // Reported under the same key and wording the form request uses,
+            // so the admin sees the same message either way.
+            $this->assertArrayHasKey('academic_session_id', $e->errors());
+            $this->assertSame(
+                'This student already has an enrollment for that session and track.',
+                $e->errors()['academic_session_id'][0]
+            );
+        }
+
+        // Nothing was written, and the original placement is untouched.
+        $this->assertSame(1, StudentAcademicEnrollment::count());
+        $this->assertSame('Active', $student->activeEnrollmentForTrack('School')->status);
+    }
+
+    public function test_the_madrassa_track_is_not_blocked_below_the_form_request(): void
+    {
+        $student = $this->student();
+
+        $student->addEnrollment($this->payload([
+            'status' => 'Completed',
+            'end_date' => '2026-07-15',
+        ]));
+
+        // The same session and track, which is exactly what a madrassa
+        // student promoted mid-session holds. The guard must not touch it.
+        $student->addEnrollment($this->payload([
+            'academic_class_id' => $this->hifzClass->id,
+            'section_id' => null,
+            'start_date' => '2026-07-15',
+            'status' => 'Active',
+        ]));
+
+        $this->assertSame(2, StudentAcademicEnrollment::count());
+        $this->assertCount(1, $student->fresh()->activeAcademicEnrollments);
+    }
+
+    public function test_a_school_enrollment_in_another_session_is_still_allowed(): void
+    {
+        $student = $this->student(['student_type' => 'School']);
+
+        $student->addEnrollment($this->schoolPlacement([
+            'academic_session_id' => $this->session->id,
+            'start_date' => '2026-04-01',
+            'status' => 'Completed',
+            'end_date' => '2027-03-31',
+        ]));
+
+        $student->addEnrollment($this->schoolPlacement([
+            'academic_session_id' => $this->nextSession->id,
+            'start_date' => '2027-04-01',
+            'status' => 'Active',
+        ]));
+
+        $this->assertSame(2, StudentAcademicEnrollment::count());
+    }
+
+    /**
+     * The school track of a dual-track student is guarded on its own.
+     */
+    public function test_the_guard_does_not_reach_across_tracks(): void
+    {
+        $student = $this->student(['student_type' => 'Hifz + School']);
+
+        $student->addEnrollment($this->payload());
+
+        // A school enrollment in the same session is a different track, so
+        // the madrassa row must not block it.
+        $student->addEnrollment($this->schoolPlacement([
+            'academic_session_id' => $this->session->id,
+            'start_date' => '2026-04-01',
+            'status' => 'Active',
+        ]));
+
+        $this->assertSame(2, StudentAcademicEnrollment::count());
+        $this->assertCount(2, $student->fresh()->activeAcademicEnrollments);
     }
 
     /* ---------------------------------------------------------------- */

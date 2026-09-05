@@ -21,7 +21,7 @@
                 <p class="text-sm text-gray-600 mt-1">
                     Choose an academic group and a month, then transcribe the paper attendance register for that month.
                     Madrassa is entered one period at a time; School is entered in the Morning only.
-                    Saturday and Sunday are off days for both tracks.
+                    Sunday is the weekly off day. Saturday is a working day for both tracks.
                 </p>
             </div>
 
@@ -584,11 +584,9 @@
             {{-- Suggestions only: the reason is free text so an administrator
                  can record what actually happened. --}}
             <datalist id="absence-reasons">
-                <option value="Sick"></option>
-                <option value="Family issue"></option>
-                <option value="Emergency"></option>
-                <option value="Personal reason"></option>
-                <option value="Other"></option>
+                @foreach($absenceReasons as $absenceReason)
+                    <option value="{{ $absenceReason }}"></option>
+                @endforeach
             </datalist>
         @endif
     </div>

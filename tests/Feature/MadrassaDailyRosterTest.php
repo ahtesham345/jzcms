@@ -438,26 +438,36 @@ class MadrassaDailyRosterTest extends TestCase
     /* The date: weekends, and never writing on a read */
     /* ---------------------------------------------------------------- */
 
-    public function test_a_weekend_shows_the_off_day_panel_instead_of_a_roster(): void
+    public function test_a_sunday_shows_the_off_day_panel_instead_of_a_roster(): void
     {
         $this->madrassaEnrollment($this->student('Ahtesham Shakeel'));
 
-        foreach ([self::SATURDAY, self::SUNDAY] as $weekend) {
-            $response = $this->loadRoster(['record_date' => $weekend]);
+        $response = $this->loadRoster(['record_date' => self::SUNDAY]);
 
-            $response->assertOk();
-            $response->assertSee('Weekend / Off Day');
-            $this->assertSame('off_day', $response->viewData('rosterState'));
-            // No roster is even queried for a day nobody sits.
-            $this->assertNull($response->viewData('roster'));
-        }
+        $response->assertOk();
+        $response->assertSee('Weekly Off Day');
+        $this->assertSame('off_day', $response->viewData('rosterState'));
+        // No roster is even queried for a day nobody sits.
+        $this->assertNull($response->viewData('roster'));
     }
 
-    public function test_a_weekend_date_still_cannot_create_a_record(): void
+    public function test_a_saturday_shows_a_roster_like_any_other_working_day(): void
+    {
+        $this->madrassaEnrollment($this->student('Ahtesham Shakeel'));
+
+        $response = $this->loadRoster(['record_date' => self::SATURDAY]);
+
+        $response->assertOk();
+        $response->assertDontSee('Weekly Off Day');
+        $this->assertNotSame('off_day', $response->viewData('rosterState'));
+        $this->assertNotNull($response->viewData('roster'));
+    }
+
+    public function test_the_off_day_still_cannot_create_a_record(): void
     {
         $enrollment = $this->madrassaEnrollment($this->student('Ahtesham Shakeel'));
 
-        $this->post(route('hifz.store'), $this->hifzPayload($enrollment, ['record_date' => self::SATURDAY]))
+        $this->post(route('hifz.store'), $this->hifzPayload($enrollment, ['record_date' => self::SUNDAY]))
             ->assertSessionHasErrors('record_date');
 
         $this->assertDatabaseCount('madrassa_daily_records', 0);

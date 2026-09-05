@@ -35,12 +35,16 @@ use Illuminate\Http\Request;
  *     filtered range, active or not, so a result recorded before a
  *     promotion keeps appearing under the placement it was recorded in.
  *
- * Because student_academic_enrollments is unique on student + session +
- * track, selecting a session - which is the default - gives exactly one
- * enrollment per student, and therefore one row per student per term. A
- * student only occupies two placements at once across sessions, and with
- * All Sessions chosen those genuinely are two different placements and are
- * shown as such.
+ * A madrassa student may hold several placements inside one session, since
+ * a stage finishes when the student finishes it rather than when the year
+ * does. They still sit one Grand Test per session per term, so a term
+ * already marked against an earlier placement is not asked for again under
+ * the placement they were promoted into: scopeForResultReport() drops that
+ * later row, and the student appears once for the term with the result they
+ * were given. A term nobody has marked is still reported as missing.
+ *
+ * With All Sessions chosen, placements in different sessions genuinely are
+ * different placements and are shown as such.
  *
  * Every number on the page is aggregated in SQL over the whole filtered
  * set, not over the page in hand: a summary that only described 25 students
@@ -125,21 +129,13 @@ class StudentResultReportController extends Controller
             // Qualified throughout: students is joined for ordering and for
             // the search, and carries columns of the same name.
             ->where('student_academic_enrollments.academic_track', StudentResult::ACADEMIC_TRACK)
-            ->where(function ($query) use ($terms) {
-                // Active placements, so a student nobody has marked yet is
-                // listed as Not Entered rather than vanishing from the
-                // page. This is the half an inner join on results would
-                // destroy.
-                $query->where('student_academic_enrollments.status', 'Active')
-                    // Plus any placement that actually carries a result in
-                    // range, active or not. This is what keeps a First Term
-                    // result visible under Nazra after the student has been
-                    // promoted out of it.
-                    ->orWhereHas('studentResults', function ($result) use ($terms) {
-                        $result->whereIn('term', $terms)
-                            ->where('test_type', StudentResult::TEST_GRAND);
-                    });
-            })
+            // Active placements, so a student nobody has marked yet is listed
+            // as Not Entered rather than vanishing from the page; plus any
+            // placement carrying a result in range, so a result stays visible
+            // under the placement it was marked in. An active placement whose
+            // term has already been marked against an earlier placement in
+            // the same session is left out - see the scope for why.
+            ->forResultReport($terms)
             ->when($filters['academic_session_id'], fn ($query, $value) => $query->where('student_academic_enrollments.academic_session_id', $value))
             ->when($filters['department_id'], fn ($query, $value) => $query->where('student_academic_enrollments.department_id', $value))
             ->when($filters['academic_class_id'], fn ($query, $value) => $query->where('student_academic_enrollments.academic_class_id', $value))

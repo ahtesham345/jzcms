@@ -54,12 +54,22 @@ class StoreStudentEnrollmentRequest extends FormRequest
                 'integer',
                 'exists:academic_sessions,id',
 
-                // One enrollment per student per session per track. Scoped by
-                // track so a Hifz + School student can hold both.
-                Rule::unique('student_academic_enrollments', 'academic_session_id')
-                    ->where('student_id', $this->studentId())
-                    ->where('academic_track', $this->input('academic_track'))
-                    ->ignore($this->enrollmentId()),
+                // One enrollment per student per session, on the school
+                // track. A school class runs for the academic year, so a
+                // second one inside a session is a mistake.
+                //
+                // The madrassa is left out on purpose: a stage is finished
+                // when the student finishes it, so Nazra and the Hifz stage
+                // that follows it can both belong to the session that was
+                // running when each was recorded.
+                ...(StudentAcademicEnrollment::trackIsSessionBound($this->input('academic_track'))
+                    ? [
+                        Rule::unique('student_academic_enrollments', 'academic_session_id')
+                            ->where('student_id', $this->studentId())
+                            ->where('academic_track', $this->input('academic_track'))
+                            ->ignore($this->enrollmentId()),
+                    ]
+                    : []),
             ],
 
             'academic_track' => ['required', Rule::in(StudentAcademicEnrollment::ACADEMIC_TRACKS)],

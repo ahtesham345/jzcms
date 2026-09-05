@@ -221,7 +221,7 @@ class ResultReportLanguage
             'page' => 'Page',
             'no_session_note' => 'No academic session is selected, so there are no months to report.',
             'attendance_note' => 'Madrassa registers only. The madrassa sits three registers a day, so Present and Absent count register marks; the percentage is Present over what has actually been recorded.',
-            'month_note' => 'Total Days counts the teaching days this student was enrolled for, weekends excluded. A session still running is counted only as far as today.',
+            'month_note' => 'Total Days counts the teaching days this student was enrolled for, Sundays excluded. A session still running is counted only as far as today.',
             'na' => 'N/A',
 
             // The admission test passed students notice. It is not a result
@@ -330,7 +330,7 @@ class ResultReportLanguage
             'page' => 'صفحہ',
             'no_session_note' => 'کوئی تعلیمی سال منتخب نہیں، اس لیے مہینوں کی رپورٹ دستیاب نہیں۔',
             'attendance_note' => 'صرف مدرسہ کے رجسٹر۔ مدرسہ میں روزانہ تین حاضریاں ہوتی ہیں، اس لیے حاضر اور غیر حاضر رجسٹر کے اندراجات شمار کرتے ہیں۔',
-            'month_note' => 'کل ایام میں وہ تدریسی دن شمار ہوتے ہیں جن میں طالب علم داخل تھا، ہفتہ اور اتوار کے علاوہ۔ جاری تعلیمی سال آج تک شمار ہوتا ہے۔',
+            'month_note' => 'کل ایام میں وہ تدریسی دن شمار ہوتے ہیں جن میں طالب علم داخل تھا، اتوار کے علاوہ۔ جاری تعلیمی سال آج تک شمار ہوتا ہے۔',
             'na' => 'دستیاب نہیں',
 
             // The admission test passed students notice.

@@ -315,8 +315,8 @@ class PrayerAttendanceSessionSummaryTest extends TestCase
         }
 
         // The current month counts only as far as today: 1 to 22 August
-        // holds fifteen working days.
-        $this->assertSame(75, $monthly->get('August 2026')['expected']);
+        // holds nineteen working days.
+        $this->assertSame(95, $monthly->get('August 2026')['expected']);
 
         // A month already behind us is counted in full.
         $this->assertSame(
@@ -538,14 +538,17 @@ class PrayerAttendanceSessionSummaryTest extends TestCase
         $this->assertSame('50.00%', $group['percentage']);
     }
 
-    public function test_weekends_are_excluded_from_expected_prayers(): void
+    public function test_sundays_are_excluded_from_expected_prayers(): void
     {
-        // One calendar week is five working days, not seven.
-        $this->assertSame(5, StudentPrayerAttendance::workingDaysBetween(self::MONDAY, '2026-08-09'));
-        $this->assertSame(25, StudentPrayerAttendance::expectedPrayersForDays(5));
+        // One calendar week is six working days, not seven.
+        $this->assertSame(6, StudentPrayerAttendance::workingDaysBetween(self::MONDAY, '2026-08-09'));
+        $this->assertSame(30, StudentPrayerAttendance::expectedPrayersForDays(6));
 
-        // A Saturday to Sunday pair offers nothing.
-        $this->assertSame(0, StudentPrayerAttendance::workingDaysBetween(self::SATURDAY, self::SUNDAY));
+        // A Sunday on its own offers nothing.
+        $this->assertSame(0, StudentPrayerAttendance::workingDaysBetween(self::SUNDAY, self::SUNDAY));
+
+        // The Saturday beside it is worked, so the pair offers one day.
+        $this->assertSame(1, StudentPrayerAttendance::workingDaysBetween(self::SATURDAY, self::SUNDAY));
     }
 
     public function test_overlapping_placements_do_not_double_count_a_day(): void
@@ -728,8 +731,8 @@ class PrayerAttendanceSessionSummaryTest extends TestCase
     public function test_the_group_percentage_is_from_totals_not_averaged(): void
     {
         // One student at 100% over a single prayer, another at barely
-        // anything over seventy-five. Averaging the two percentages would
-        // give about 50%; the honest figure is 2 of 76.
+        // anything over ninety-five. Averaging the two percentages would
+        // give about 50%; the honest figure is 2 of 96.
         $first = $this->student('Ahtesham Shakeel');
         $firstEnrollment = $this->madrassaEnrollment($first);
         $this->prayer($firstEnrollment, self::MONDAY, 'Fajr', 'Present');
@@ -752,15 +755,15 @@ class PrayerAttendanceSessionSummaryTest extends TestCase
             }
         }
 
-        // Fifteen working days to 22 August, five prayers each.
-        $this->assertSame(75, $written);
+        // Nineteen working days to 22 August, five prayers each.
+        $this->assertSame(95, $written);
 
         $group = $this->summary()->viewData('group');
 
-        $this->assertSame(76, $group['recorded']);
+        $this->assertSame(96, $group['recorded']);
         $this->assertSame(2, $group['present']);
-        $this->assertSame(74, $group['absent']);
-        $this->assertSame('2.63%', $group['percentage']);
+        $this->assertSame(94, $group['absent']);
+        $this->assertSame('2.08%', $group['percentage']);
     }
 
     /* ---------------------------------------------------------------- */
@@ -797,10 +800,10 @@ class PrayerAttendanceSessionSummaryTest extends TestCase
         $this->assertSame(5, $august['present']);
         $this->assertSame(5, $august['absent']);
         $this->assertSame('50.00%', $august['percentage']);
-        // 1 to 22 August is fifteen working days: the month is still
+        // 1 to 22 August is nineteen working days: the month is still
         // running, so the days after today expect nothing.
-        $this->assertSame(75, $august['expected']);
-        $this->assertSame(65, $august['unrecorded']);
+        $this->assertSame(95, $august['expected']);
+        $this->assertSame(85, $august['unrecorded']);
 
         $july = $monthly->get('July 2026');
         $this->assertSame(5, $july['recorded']);
@@ -827,7 +830,7 @@ class PrayerAttendanceSessionSummaryTest extends TestCase
         $this->assertSame(0, $monthly->get('April 2026')['expected']);
         $this->assertSame(0, $monthly->get('July 2026')['expected']);
         // August is the current month, so it is counted to today only.
-        $this->assertSame(75, $monthly->get('August 2026')['expected']);
+        $this->assertSame(95, $monthly->get('August 2026')['expected']);
 
         // And the months add up to the session total.
         $this->assertSame(

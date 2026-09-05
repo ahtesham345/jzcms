@@ -48,6 +48,32 @@ class StudentAttendance extends Model
         self::STATUS_ABSENT,
     ];
 
+    /**
+     * The absence reasons the sheet offers.
+     *
+     * Suggestions, not a closed list. The column is free text and the
+     * validation only bounds its length, so an administrator can always
+     * record what actually happened rather than the nearest option; these
+     * are the ones common enough to be worth one click. Kept here rather
+     * than in the view because the sheet and its reason dialog both need
+     * them, and because a list written twice is a list that drifts.
+     *
+     * "Absent" is one of them: an absence nobody has given a reason for is
+     * still a reason worth recording plainly, and it is what the register
+     * says. It is a reason and never a status - the status is already
+     * Absent, and STATUSES above is untouched by it.
+     *
+     * @var array<int, string>
+     */
+    public const ABSENCE_REASONS = [
+        'Absent',
+        'Sick',
+        'Family issue',
+        'Emergency',
+        'Personal reason',
+        'Other',
+    ];
+
     public const PERIOD_MORNING = 'Morning';
 
     public const PERIOD_AFTERNOON = 'Afternoon';
@@ -82,13 +108,21 @@ class StudentAttendance extends Model
     /**
      * The days no attendance is taken, as Carbon day-of-week numbers.
      *
-     * Saturday and Sunday are off for both tracks, so no row exists for
-     * them at all rather than a row marked as a holiday.
+     * Sunday is the institution's only weekly off day: the week runs Monday
+     * to Saturday for both tracks. No row exists for an off day at all,
+     * rather than a row marked as a holiday.
+     *
+     * This is the whole definition of the attendance week and the only place
+     * it is written down. Everything that asks whether a date is workable -
+     * the sheets, their validation, the monthly calendar, the teaching-day
+     * counts and every report built on them - reads it through the methods
+     * below. Prayer attendance and the madrassa daily record delegate here
+     * too rather than keeping their own copy, because the institution runs
+     * one week and two copies of it would drift apart.
      *
      * @var array<int, int>
      */
     public const OFF_DAYS = [
-        CarbonInterface::SATURDAY,
         CarbonInterface::SUNDAY,
     ];
 
@@ -242,8 +276,8 @@ class StudentAttendance extends Model
     /**
      * Determine whether a date is a teaching day.
      *
-     * Saturday and Sunday are off for both tracks. An unparseable date is
-     * not a teaching day either: it can never be one.
+     * Sunday is the weekly off day for both tracks. An unparseable date
+     * is not a teaching day either: it can never be one.
      */
     public static function isAttendanceDay(mixed $date): bool
     {
@@ -508,9 +542,10 @@ class StudentAttendance extends Model
     /**
      * Count the teaching days in a range, both ends included.
      *
-     * Saturdays and Sundays are off, so a range is mostly whole weeks of
-     * five. Counted arithmetically rather than by walking every date: a
-     * whole academic year is asked for once per student.
+     * Sunday is off, so a range is mostly whole weeks of six. Counted
+     * arithmetically rather than by walking every date - a whole academic
+     * year is asked for once per student - and from OFF_DAYS rather than
+     * from a hardcoded week length, so the arithmetic follows the calendar.
      */
     public static function teachingDaysBetween(mixed $start, mixed $end): int
     {

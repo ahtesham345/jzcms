@@ -141,6 +141,79 @@ class Student extends Model
     }
 
     /**
+     * Refuse a second enrollment on a track that allows one per session.
+     *
+     * The school runs a class for the academic year, so a student holds one
+     * school enrollment per session. The madrassa does not: a stage finishes
+     * when the student finishes it, so a madrassa student may be enrolled
+     * into Hifz in the same session their Nazra enrollment belongs to.
+     *
+     * This is the whole of that rule. It is not a unique index because a
+     * unique index cannot be made conditional on a column value in a way
+     * that is portable to MySQL - the same reason
+     * ParentGuardian::linkStudent() re-checks "one primary per relationship
+     * type" in PHP. The row lock is what makes it hold under concurrent
+     * writes, so every caller must run it inside a transaction: the read and
+     * the insert it guards have to be one atomic step, or two requests can
+     * both read "free" and both insert.
+     *
+     * Shared by promote() and addEnrollment(), which are the two ways a new
+     * enrollment reaches the table from a form.
+     *
+     * @throws ValidationException
+     */
+    private function guardSessionBoundTrack(string $track, int $academicSessionId): void
+    {
+        if (! StudentAcademicEnrollment::trackIsSessionBound($track)) {
+            return;
+        }
+
+        $taken = $this->academicEnrollments()
+            ->where('academic_track', $track)
+            ->where('academic_session_id', $academicSessionId)
+            ->lockForUpdate()
+            ->first();
+
+        if ($taken !== null) {
+            // The same key and wording the enrollment form's own unique rule
+            // uses, so a request that loses this race is reported to the
+            // admin exactly as one that failed validation outright.
+            throw ValidationException::withMessages([
+                'academic_session_id' => 'This student already has an enrollment for that session and track.',
+            ]);
+        }
+    }
+
+    /**
+     * Record one academic placement for this student.
+     *
+     * The check and the insert share a transaction, with the rows the check
+     * reads locked for its duration. Validation has already run by the time
+     * this is called, but it ran outside any transaction and against an
+     * earlier moment: two school enrollments submitted at once could both
+     * pass it. This is what stops the second being written.
+     *
+     * The madrassa path is deliberately untouched by the guard - several
+     * placements in one session are legitimate there - so nothing about it
+     * is serialised beyond the insert itself.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws ValidationException
+     */
+    public function addEnrollment(array $data): StudentAcademicEnrollment
+    {
+        return DB::transaction(function () use ($data) {
+            $this->guardSessionBoundTrack(
+                $data['academic_track'],
+                (int) $data['academic_session_id']
+            );
+
+            return $this->academicEnrollments()->create($data);
+        });
+    }
+
+    /**
      * Promote one track of this student's placement.
      *
      * The active enrollment for the track is completed as at the promotion
@@ -180,16 +253,7 @@ class Student extends Model
             $updatePlacement = $this->placementRepresentsTrack($track);
 
             // Re-checked under the lock: validation saw an earlier moment.
-            $taken = $this->academicEnrollments()
-                ->where('academic_track', $track)
-                ->where('academic_session_id', $data['academic_session_id'])
-                ->exists();
-
-            if ($taken) {
-                throw ValidationException::withMessages([
-                    'academic_session_id' => 'This student already has an enrollment for that session and track.',
-                ]);
-            }
+            $this->guardSessionBoundTrack($track, (int) $data['academic_session_id']);
 
             $current->update([
                 'status' => 'Completed',

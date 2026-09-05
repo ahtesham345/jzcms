@@ -411,17 +411,21 @@ class StudentPrayerAttendanceHistoryTest extends TestCase
 
         $response = $this->history($student, ['month' => 8, 'year' => 2026]);
 
-        foreach ([self::SATURDAY, self::SUNDAY] as $weekend) {
-            $row = $this->gridRow($response, $weekend);
+        // Sunday is the off day: no status at all, on any of the five.
+        $sunday = $this->gridRow($response, self::SUNDAY);
 
-            $this->assertNotNull($row);
-            $this->assertTrue($row['is_off_day']);
+        $this->assertNotNull($sunday);
+        $this->assertTrue($sunday['is_off_day']);
 
-            // No status at all, on any of the five.
-            foreach (StudentPrayerAttendance::PRAYERS as $prayerName) {
-                $this->assertNull($row['cells'][$prayerName]);
-            }
+        foreach (StudentPrayerAttendance::PRAYERS as $prayerName) {
+            $this->assertNull($sunday['cells'][$prayerName]);
         }
+
+        // Saturday is a working day and is offered like any other.
+        $saturday = $this->gridRow($response, self::SATURDAY);
+
+        $this->assertNotNull($saturday);
+        $this->assertFalse($saturday['is_off_day']);
 
         $response->assertSee('OFF');
     }

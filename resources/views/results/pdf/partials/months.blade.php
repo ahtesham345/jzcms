@@ -55,7 +55,7 @@
     </table>
 
     <p class="small muted">
-        Total Days counts the teaching days this student was enrolled for, weekends excluded. A session still
+        Total Days counts the teaching days this student was enrolled for, Sundays excluded. A session still
         running is counted only as far as today, so months still to come report nothing.
     </p>
 @endif

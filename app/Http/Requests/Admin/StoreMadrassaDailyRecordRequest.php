@@ -196,10 +196,10 @@ class StoreMadrassaDailyRecordRequest extends FormRequest
                     ->ignore($this->recordId()),
 
                 function ($attribute, $value, $fail) {
-                    // Saturday and Sunday are off across the institution,
+                    // Sunday is off across the institution,
                     // so there is no day's work to record on them.
                     if ($offDay = MadrassaDailyRecord::offDayName($value)) {
-                        $fail("A daily record cannot be created on a {$offDay} ({$value}). Saturday and Sunday are off days.");
+                        $fail("A daily record cannot be created on a {$offDay} ({$value}). Sunday is the weekly off day.");
                     }
                 },
             ],

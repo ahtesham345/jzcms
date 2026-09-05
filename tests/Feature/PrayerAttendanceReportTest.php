@@ -32,9 +32,9 @@ class PrayerAttendanceReportTest extends TestCase
     /**
      * August 2026 holds 21 working days, so 105 prayers per student.
      */
-    private const AUGUST_WORKING_DAYS = 21;
+    private const AUGUST_WORKING_DAYS = 26;
 
-    private const AUGUST_EXPECTED = 105;
+    private const AUGUST_EXPECTED = 130;
 
     protected function setUp(): void
     {
@@ -444,15 +444,16 @@ class PrayerAttendanceReportTest extends TestCase
         $this->assertSame(self::AUGUST_EXPECTED, $response->viewData('group')['expected']);
     }
 
-    public function test_weekends_are_excluded_from_expected_prayers(): void
+    public function test_sundays_are_excluded_from_expected_prayers(): void
     {
-        // August 2026 has 31 days, ten of which are weekend days.
-        $this->assertSame(21, StudentPrayerAttendance::prayerDaysInMonth(2026, 8));
-        $this->assertSame(105, StudentPrayerAttendance::expectedPrayersInMonth(2026, 8));
+        // August 2026 has 31 days, five of which are Sundays. Its Saturdays
+        // are worked like any other day.
+        $this->assertSame(26, StudentPrayerAttendance::prayerDaysInMonth(2026, 8));
+        $this->assertSame(130, StudentPrayerAttendance::expectedPrayersInMonth(2026, 8));
 
-        // February 2026 has 28 days, twenty of them working.
-        $this->assertSame(20, StudentPrayerAttendance::prayerDaysInMonth(2026, 2));
-        $this->assertSame(100, StudentPrayerAttendance::expectedPrayersInMonth(2026, 2));
+        // February 2026 has 28 days, four Sundays and twenty-four worked.
+        $this->assertSame(24, StudentPrayerAttendance::prayerDaysInMonth(2026, 2));
+        $this->assertSame(120, StudentPrayerAttendance::expectedPrayersInMonth(2026, 2));
     }
 
     public function test_the_worked_example_from_the_specification(): void
@@ -464,8 +465,8 @@ class PrayerAttendanceReportTest extends TestCase
         // in the month's report at all.
         $enrollment = $this->madrassaEnrollment($student, ['start_date' => '2026-01-01']);
 
-        // February 2026: twenty working days, so a hundred expected. Enter
-        // seventy of them - fifty-five present, fifteen absent.
+        // February 2026: twenty-four working days, so a hundred and twenty
+        // expected. Enter seventy - fifty-five present, fifteen absent.
         $dates = [];
         $cursor = Carbon::create(2026, 2, 1);
 
@@ -477,7 +478,7 @@ class PrayerAttendanceReportTest extends TestCase
             $cursor->addDay();
         }
 
-        $this->assertCount(20, $dates);
+        $this->assertCount(24, $dates);
 
         $written = 0;
 
@@ -494,9 +495,9 @@ class PrayerAttendanceReportTest extends TestCase
 
         $group = $this->report(['month' => 2, 'year' => 2026])->viewData('group');
 
-        $this->assertSame(100, $group['expected']);
+        $this->assertSame(120, $group['expected']);
         $this->assertSame(70, $group['recorded']);
-        $this->assertSame(30, $group['unrecorded']);
+        $this->assertSame(50, $group['unrecorded']);
         $this->assertSame(55, $group['present']);
         $this->assertSame(15, $group['absent']);
         $this->assertSame('78.57%', $group['percentage']);
@@ -520,10 +521,10 @@ class PrayerAttendanceReportTest extends TestCase
         $this->assertSame(1, $group['students_with_records']);
         $this->assertSame(2, $group['students_without_records']);
 
-        // Three students times a hundred and five.
-        $this->assertSame(315, $group['expected']);
+        // Three students times a hundred and thirty.
+        $this->assertSame(390, $group['expected']);
         $this->assertSame(5, $group['recorded']);
-        $this->assertSame(310, $group['unrecorded']);
+        $this->assertSame(385, $group['unrecorded']);
     }
 
     public function test_the_group_percentage_is_computed_from_totals_not_averaged(): void
@@ -581,10 +582,10 @@ class PrayerAttendanceReportTest extends TestCase
             array_keys($breakdown)
         );
 
-        // One student times twenty-one working days.
-        $this->assertSame(21, $breakdown['Fajr']['expected']);
+        // One student times twenty-six working days.
+        $this->assertSame(26, $breakdown['Fajr']['expected']);
         $this->assertSame(2, $breakdown['Fajr']['recorded']);
-        $this->assertSame(19, $breakdown['Fajr']['unrecorded']);
+        $this->assertSame(24, $breakdown['Fajr']['unrecorded']);
         $this->assertSame(1, $breakdown['Fajr']['present']);
         $this->assertSame(1, $breakdown['Fajr']['absent']);
         $this->assertSame('50.00%', $breakdown['Fajr']['percentage']);
@@ -595,7 +596,7 @@ class PrayerAttendanceReportTest extends TestCase
 
         // Never transcribed, so no verdict.
         $this->assertSame(0, $breakdown['Isha']['recorded']);
-        $this->assertSame(21, $breakdown['Isha']['unrecorded']);
+        $this->assertSame(26, $breakdown['Isha']['unrecorded']);
         $this->assertSame('N/A', $breakdown['Isha']['percentage']);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -18,6 +19,39 @@ class StudentAcademicEnrollment extends Model
         'Madrassa',
         'School',
     ];
+
+    /**
+     * The tracks that allow only one enrollment per academic session.
+     *
+     * The school runs a class for the academic year, so a school student
+     * holds exactly one school enrollment per session. The madrassa does
+     * not: a stage is finished when the student finishes it, which may be
+     * months before the session ends, so a madrassa student may hold
+     * several enrollments inside one session - Nazra, then Hifz, then
+     * Gardan - each recorded against the session it happened in.
+     *
+     * The track is what tells the two apart. It is already on every
+     * enrollment row and is what the promotion form promotes, so a
+     * Hifz + School student keeps the school rule on their school track
+     * and is free of it on their madrassa track, with no new flag needed.
+     *
+     * @var array<int, string>
+     */
+    public const SESSION_BOUND_TRACKS = [
+        'School',
+    ];
+
+    /**
+     * Determine whether a track allows only one enrollment per session.
+     *
+     * The single definition of that rule, read by the enrollment form
+     * request, the promotion form request and Student::promote(), so the
+     * three cannot fall out of step.
+     */
+    public static function trackIsSessionBound(?string $track): bool
+    {
+        return in_array($track, self::SESSION_BOUND_TRACKS, true);
+    }
 
     /**
      * The selectable enrollment statuses.
@@ -59,6 +93,72 @@ class StudentAcademicEnrollment extends Model
             'start_date' => 'date',
             'end_date' => 'date',
         ];
+    }
+
+    /**
+     * Narrow a query to the placements a result report should list.
+     *
+     * Two kinds are in scope, and the report depends on both:
+     *
+     *   - every placement that actually carries a Grand Test result in the
+     *     reported terms, active or not, so a result stays visible under the
+     *     placement it was marked in after the student has moved on; and
+     *   - every active placement, so a student nobody has marked yet is
+     *     listed as Not Entered rather than vanishing from the page. That
+     *     absence is what an administrator opens the report to find.
+     *
+     * The second half needs one qualification. A madrassa student may hold
+     * several placements inside one session, because a stage finishes when
+     * the student finishes it. A student sits one Grand Test per session per
+     * term, though - not one per placement - so once a term has been marked
+     * against any of that student's placements for the session, their later
+     * placement must not be listed as still missing it. Without that, a
+     * student promoted from Nazra to Hifz in July would appear twice for
+     * First Term: once as Passed under Nazra, once as Not Entered under
+     * Hifz, and the report would count a missing result that does not exist.
+     *
+     * So an active placement is dropped when a sibling placement - same
+     * student, same session, same track, different row - already carries a
+     * result for one of the reported terms. The term bound is what keeps
+     * the rest correct: a student marked for First Term and genuinely
+     * missing Final Term is still listed as missing it, because no sibling
+     * carries a Final Term result.
+     *
+     * Nothing is moved or rewritten. The result stays on the enrollment the
+     * test was taken under; this only decides which rows the report lists.
+     *
+     * Shared by the on-screen report and its PDF so the two cannot drift.
+     *
+     * @param  array<int, string>  $terms
+     */
+    public function scopeForResultReport(Builder $query, array $terms): Builder
+    {
+        return $query->where(function (Builder $query) use ($terms) {
+            $query
+                ->where(function (Builder $active) use ($terms) {
+                    $active->where('student_academic_enrollments.status', 'Active')
+                        ->whereNotExists(function ($sibling) use ($terms) {
+                            $sibling->selectRaw('1')
+                                ->from('student_academic_enrollments as sibling')
+                                ->join(
+                                    'student_results',
+                                    'student_results.student_academic_enrollment_id',
+                                    '=',
+                                    'sibling.id'
+                                )
+                                ->whereColumn('sibling.student_id', 'student_academic_enrollments.student_id')
+                                ->whereColumn('sibling.academic_session_id', 'student_academic_enrollments.academic_session_id')
+                                ->whereColumn('sibling.academic_track', 'student_academic_enrollments.academic_track')
+                                ->whereColumn('sibling.id', '!=', 'student_academic_enrollments.id')
+                                ->whereIn('student_results.term', $terms)
+                                ->where('student_results.test_type', StudentResult::TEST_GRAND);
+                        });
+                })
+                ->orWhereHas('studentResults', function ($result) use ($terms) {
+                    $result->whereIn('term', $terms)
+                        ->where('test_type', StudentResult::TEST_GRAND);
+                });
+        });
     }
 
     /**

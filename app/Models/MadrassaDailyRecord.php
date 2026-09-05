@@ -328,9 +328,9 @@ class MadrassaDailyRecord extends Model
     /**
      * Determine whether a date may hold a daily record.
      *
-     * Saturday and Sunday are off, so there is no day's work to record on
+     * Sunday is the weekly off day, so there is no day's work to record on
      * them. The rule is read from StudentAttendance rather than restated
-     * here: the madrassa runs one weekend, and two copies of it would
+     * here: the institution runs one week, and two copies of it would
      * eventually disagree. Nothing about a student's attendance is read -
      * only which days of the week the institution sits.
      */

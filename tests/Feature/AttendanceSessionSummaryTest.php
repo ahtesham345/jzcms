@@ -11,7 +11,6 @@ use App\Models\StudentAcademicEnrollment;
 use App\Models\StudentAttendance;
 use App\Models\User;
 use Database\Seeders\AdmissionDepartmentClassSeeder;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +22,7 @@ use Tests\TestCase;
  * The number this page adds is the attendance opportunity: what the paper
  * registers could hold, counted from the session and enrollment dates
  * rather than from the rows on file. Most of what follows is about keeping
- * that honest — weekends are never an opportunity, a student promoted
+ * that honest — Sundays are never an opportunity, a student promoted
  * mid-session is one student, and untranscribed attendance is never an
  * absence.
  */
@@ -72,7 +71,8 @@ class AttendanceSessionSummaryTest extends TestCase
         $this->actingAs(User::factory()->create());
         $this->seed(AdmissionDepartmentClassSeeder::class);
 
-        // August, September and October 2026: 21 + 22 + 22 = 65 weekdays.
+        // August, September and October 2026: 26 + 26 + 27 = 79 working
+        // days, every day of each month except its Sundays.
         $this->session = AcademicSession::create([
             'name' => '2026-2027', 'start_date' => self::SESSION_START, 'end_date' => self::SESSION_END,
             'is_current' => true, 'status' => true,
@@ -362,9 +362,10 @@ class AttendanceSessionSummaryTest extends TestCase
 
         $row = $this->rowFor($this->summary(['academic_track' => 'School'])->assertOk(), $enrollment->student);
 
-        // 21 + 22 + 22 weekdays across August, September and October.
-        $this->assertSame(65, $row['teaching_days']);
-        $this->assertSame(65, $row['opportunities']);
+        // 26 + 26 + 27 working days across August, September and October:
+        // every day of each month except its Sundays.
+        $this->assertSame(79, $row['teaching_days']);
+        $this->assertSame(79, $row['opportunities']);
     }
 
     public function test_madrassa_has_three_opportunities_per_teaching_day(): void
@@ -373,39 +374,54 @@ class AttendanceSessionSummaryTest extends TestCase
 
         $row = $this->rowFor($this->summary()->assertOk(), $enrollment->student);
 
-        $this->assertSame(65, $row['teaching_days']);
-        $this->assertSame(195, $row['opportunities']);
+        $this->assertSame(79, $row['teaching_days']);
+        $this->assertSame(237, $row['opportunities']);
     }
 
-    public function test_saturdays_and_sundays_are_never_an_opportunity(): void
+    public function test_sundays_are_never_an_opportunity_and_saturdays_always_are(): void
     {
-        // A session made of one weekend holds nothing to mark.
-        $weekend = AcademicSession::create([
-            'name' => 'Weekend only', 'start_date' => self::SATURDAY, 'end_date' => self::SUNDAY, 'status' => true,
+        // A session made of one Sunday holds nothing to mark.
+        $sunday = AcademicSession::create([
+            'name' => 'Sunday only', 'start_date' => self::SUNDAY, 'end_date' => self::SUNDAY, 'status' => true,
         ]);
 
         $enrollment = $this->madrassaEnrollment($this->student('Ahmed Ali'), [
-            'academic_session_id' => $weekend->id,
-            'start_date' => self::SATURDAY,
+            'academic_session_id' => $sunday->id,
+            'start_date' => self::SUNDAY,
         ]);
 
-        $response = $this->summary(['academic_session_id' => $weekend->id])->assertOk();
+        $response = $this->summary(['academic_session_id' => $sunday->id])->assertOk();
         $row = $this->rowFor($response, $enrollment->student);
 
         $this->assertSame(0, $row['teaching_days']);
         $this->assertSame(0, $row['opportunities']);
         $this->assertSame(0, $response->viewData('totals')['session_teaching_days']);
 
-        // And a session that adds the Monday holds exactly one day.
-        $withMonday = AcademicSession::create([
-            'name' => 'Weekend plus Monday', 'start_date' => self::SATURDAY, 'end_date' => self::MONDAY, 'status' => true,
+        // The Saturday before it is a working day, so a session covering
+        // both holds exactly one - the Saturday.
+        $saturdayAndSunday = AcademicSession::create([
+            'name' => 'Saturday and Sunday', 'start_date' => self::SATURDAY, 'end_date' => self::SUNDAY, 'status' => true,
         ]);
-        $this->madrassaEnrollment($this->student('Hassan Raza'), [
+        $saturdayEnrollment = $this->madrassaEnrollment($this->student('Hassan Raza'), [
+            'academic_session_id' => $saturdayAndSunday->id,
+            'start_date' => self::SATURDAY,
+        ]);
+
+        $saturdayResponse = $this->summary(['academic_session_id' => $saturdayAndSunday->id])->assertOk();
+
+        $this->assertSame(1, $saturdayResponse->viewData('totals')['session_teaching_days']);
+        $this->assertSame(1, $this->rowFor($saturdayResponse, $saturdayEnrollment->student)['teaching_days']);
+
+        // Adding the Monday makes two: Saturday and Monday, never the Sunday.
+        $withMonday = AcademicSession::create([
+            'name' => 'Saturday to Monday', 'start_date' => self::SATURDAY, 'end_date' => self::MONDAY, 'status' => true,
+        ]);
+        $this->madrassaEnrollment($this->student('Bilal Ahmad'), [
             'academic_session_id' => $withMonday->id,
             'start_date' => self::SATURDAY,
         ]);
 
-        $this->assertSame(1, $this->summary(['academic_session_id' => $withMonday->id])->viewData('totals')['session_teaching_days']);
+        $this->assertSame(2, $this->summary(['academic_session_id' => $withMonday->id])->viewData('totals')['session_teaching_days']);
     }
 
     public function test_the_session_start_and_end_dates_bound_the_opportunities(): void
@@ -415,8 +431,8 @@ class AttendanceSessionSummaryTest extends TestCase
 
         $row = $this->rowFor($this->summary()->assertOk(), $enrollment->student);
 
-        // Still only the session's own 65 teaching days.
-        $this->assertSame(65, $row['teaching_days']);
+        // Still only the session's own 79 teaching days.
+        $this->assertSame(79, $row['teaching_days']);
     }
 
     public function test_the_enrollment_start_date_is_respected(): void
@@ -426,9 +442,9 @@ class AttendanceSessionSummaryTest extends TestCase
 
         $row = $this->rowFor($this->summary()->assertOk(), $enrollment->student);
 
-        // 15 weekdays left in September plus October's 22.
-        $this->assertSame(37, $row['teaching_days']);
-        $this->assertSame(111, $row['opportunities']);
+        // 18 working days left in September plus October's 27.
+        $this->assertSame(45, $row['teaching_days']);
+        $this->assertSame(135, $row['opportunities']);
     }
 
     public function test_the_enrollment_end_date_is_respected(): void
@@ -441,9 +457,9 @@ class AttendanceSessionSummaryTest extends TestCase
 
         $row = $this->rowFor($this->summary()->assertOk(), $enrollment->student);
 
-        // August's 21 weekdays plus the 11 in September up to the 15th.
-        $this->assertSame(32, $row['teaching_days']);
-        $this->assertSame(96, $row['opportunities']);
+        // August's 26 working days plus the 13 in September up to the 15th.
+        $this->assertSame(39, $row['teaching_days']);
+        $this->assertSame(117, $row['opportunities']);
     }
 
     public function test_an_active_enrollment_runs_to_the_end_of_the_session(): void
@@ -458,8 +474,8 @@ class AttendanceSessionSummaryTest extends TestCase
 
         // No end date and an end date on the last day come to the same
         // thing: the session is the boundary either way.
-        $this->assertSame(65, $this->rowFor($response, $active->student)['teaching_days']);
-        $this->assertSame(65, $this->rowFor($response, $closed->student)['teaching_days']);
+        $this->assertSame(79, $this->rowFor($response, $active->student)['teaching_days']);
+        $this->assertSame(79, $this->rowFor($response, $closed->student)['teaching_days']);
     }
 
     /* ---------------------------------------------------------------- */
@@ -484,9 +500,10 @@ class AttendanceSessionSummaryTest extends TestCase
         $this->assertSame(20, $row['present']);
         $this->assertSame(5, $row['absent']);
         $this->assertSame(25, $row['recorded']);
-        $this->assertSame(65, $row['opportunities']);
-        // The forty still on paper, which is not the same as forty absences.
-        $this->assertSame(40, $row['unrecorded']);
+        $this->assertSame(79, $row['opportunities']);
+        // The fifty-four still on paper, which is not the same as fifty-four
+        // absences.
+        $this->assertSame(54, $row['unrecorded']);
         $this->assertSame(80.0, $row['percentage']);
     }
 
@@ -500,11 +517,11 @@ class AttendanceSessionSummaryTest extends TestCase
         $row = $this->rowFor($this->summary(['academic_track' => 'School'])->assertOk(), $enrollment->student);
 
         $this->assertSame(1, $row['recorded']);
-        $this->assertSame(64, $row['unrecorded']);
+        $this->assertSame(78, $row['unrecorded']);
         $this->assertSame(0, $row['absent']);
         // Present over recorded, not present over opportunities.
         $this->assertSame(100.0, $row['percentage']);
-        $this->assertNotSame(round(1 / 65 * 100, 2), $row['percentage']);
+        $this->assertNotSame(round(1 / 79 * 100, 2), $row['percentage']);
     }
 
     public function test_a_student_with_nothing_recorded_shows_not_available(): void
@@ -515,7 +532,7 @@ class AttendanceSessionSummaryTest extends TestCase
         $row = $this->rowFor($response, $enrollment->student);
 
         $this->assertSame(0, $row['recorded']);
-        $this->assertSame(195, $row['unrecorded']);
+        $this->assertSame(237, $row['unrecorded']);
         $this->assertNull($row['percentage']);
         $this->assertNull($response->viewData('totals')['percentage']);
 
@@ -558,7 +575,7 @@ class AttendanceSessionSummaryTest extends TestCase
         $months = $this->summary()->assertOk()->viewData('months');
 
         $this->assertSame(['Aug 2026', 'Sep 2026', 'Oct 2026'], array_column($months, 'label'));
-        $this->assertSame([21, 22, 22], array_column($months, 'session_teaching_days'));
+        $this->assertSame([26, 26, 27], array_column($months, 'session_teaching_days'));
     }
 
     public function test_a_partial_first_and_final_month_count_only_the_overlap(): void
@@ -574,9 +591,9 @@ class AttendanceSessionSummaryTest extends TestCase
 
         $months = $this->summary(['academic_session_id' => $partial->id])->assertOk()->viewData('months');
 
-        // 20 to 31 August is 8 weekdays; 1 to 9 October is 7.
+        // 20 to 31 August is 10 working days; 1 to 9 October is 8.
         $this->assertSame(['Aug 2026', 'Sep 2026', 'Oct 2026'], array_column($months, 'label'));
-        $this->assertSame([8, 22, 7], array_column($months, 'session_teaching_days'));
+        $this->assertSame([10, 26, 8], array_column($months, 'session_teaching_days'));
     }
 
     public function test_monthly_opportunities_follow_the_track(): void
@@ -589,8 +606,8 @@ class AttendanceSessionSummaryTest extends TestCase
 
         // One student on each track, so the month reads as days times
         // registers.
-        $this->assertSame(21 * 3, $madrassa[0]['opportunities']);
-        $this->assertSame(21, $school[0]['opportunities']);
+        $this->assertSame(26 * 3, $madrassa[0]['opportunities']);
+        $this->assertSame(26, $school[0]['opportunities']);
     }
 
     public function test_the_monthly_breakdown_counts_what_was_recorded_in_each_month(): void
@@ -618,22 +635,54 @@ class AttendanceSessionSummaryTest extends TestCase
     /* Promotion inside a session */
     /* ---------------------------------------------------------------- */
 
-    public function test_a_student_cannot_hold_two_enrollments_on_one_track_in_one_session(): void
+    /**
+     * A madrassa student promoted part way through the session.
+     *
+     * This test used to assert the opposite: that the database refused a
+     * second madrassa row in one session. It no longer does, because a
+     * madrassa stage finishes when the student finishes it and the Imam
+     * promotes them then. What the summary has to get right is that the
+     * student is still one row, with both placements counted once.
+     */
+    public function test_a_madrassa_student_promoted_inside_the_session_is_still_one_row(): void
     {
         $student = $this->student('Ahmed Ali');
-        $this->madrassaEnrollment($student, ['end_date' => '2026-09-15', 'status' => 'Completed']);
 
-        // The academic module allows one enrollment per student per session
-        // per track, so a promotion always moves the student into another
-        // session. A second madrassa row in this session is refused by the
-        // database, which is why one student is always one row here.
-        $this->expectException(UniqueConstraintViolationException::class);
-
-        $this->madrassaEnrollment($student, [
+        // Nazra until 15 September.
+        $first = $this->madrassaEnrollment($student, [
             'academic_class_id' => $this->nazra->id,
             'section_id' => null,
+            'end_date' => '2026-09-15',
+            'status' => 'Completed',
+        ]);
+
+        // Promoted into Hifz the next day, in the same session.
+        $second = $this->madrassaEnrollment($student, [
             'start_date' => '2026-09-16',
         ]);
+
+        $this->recordMany($first, [self::MONDAY, self::TUESDAY], 'Morning', 'Present');
+        $this->record($second, '2026-09-16', 'Morning', 'Absent', 'Sick');
+
+        $response = $this->summary()->assertOk();
+
+        $this->assertCount(1, $response->viewData('students')->items());
+
+        $row = $this->rowFor($response, $student);
+
+        // Both placements, and the attendance of both.
+        $this->assertSame(2, $row['placements']);
+        $this->assertSame(2, $row['present']);
+        $this->assertSame(1, $row['absent']);
+
+        // Named after where the student ended the session.
+        $this->assertSame($this->hifzClass->id, $row['academic_class_id']);
+
+        // The two placements run back to back, so they merge into one
+        // stretch and the changeover day is counted once rather than twice:
+        // 79 teaching days, the same as the student who never moved in
+        // test_a_student_appears_once_per_session_and_track.
+        $this->assertSame(79, $row['teaching_days']);
     }
 
     public function test_a_student_appears_once_per_session_and_track(): void
@@ -652,7 +701,7 @@ class AttendanceSessionSummaryTest extends TestCase
         $row = $this->rowFor($response, $student);
 
         $this->assertSame(1, $row['placements']);
-        $this->assertSame(65, $row['teaching_days']);
+        $this->assertSame(79, $row['teaching_days']);
         $this->assertSame(2, $row['present']);
         $this->assertSame(1, $row['absent']);
     }
@@ -744,12 +793,12 @@ class AttendanceSessionSummaryTest extends TestCase
         $schoolRow = $this->rowFor($this->summary(['academic_track' => 'School'])->assertOk(), $student);
 
         // Madrassa: three registers a day, and only its own marks.
-        $this->assertSame(195, $madrassaRow['opportunities']);
+        $this->assertSame(237, $madrassaRow['opportunities']);
         $this->assertSame(3, $madrassaRow['present']);
         $this->assertSame(1, $madrassaRow['absent']);
 
         // School: one register a day, and only its own marks.
-        $this->assertSame(65, $schoolRow['opportunities']);
+        $this->assertSame(79, $schoolRow['opportunities']);
         $this->assertSame(3, $schoolRow['present']);
         $this->assertSame(0, $schoolRow['absent']);
 
@@ -852,10 +901,10 @@ class AttendanceSessionSummaryTest extends TestCase
         $this->assertSame('Hifz', $row[5]);
         $this->assertSame('Hifz-A', $row[6]);
         $this->assertSame('Madrassa', $row[7]);
-        $this->assertSame('65', $row[8]);
-        $this->assertSame('195', $row[9]);
+        $this->assertSame('79', $row[8]);
+        $this->assertSame('237', $row[9]);
         $this->assertSame('3', $row[10]);
-        $this->assertSame('192', $row[11]);
+        $this->assertSame('234', $row[11]);
         $this->assertSame('2', $row[12]);
         $this->assertSame('1', $row[13]);
         $this->assertSame('66.67', $row[14]);
@@ -883,9 +932,9 @@ class AttendanceSessionSummaryTest extends TestCase
 
         $row = $this->exportRows()[1];
 
-        $this->assertSame('195', $row[9]);
+        $this->assertSame('237', $row[9]);
         $this->assertSame('0', $row[10]);
-        $this->assertSame('195', $row[11]);
+        $this->assertSame('237', $row[11]);
         $this->assertSame('0', $row[12]);
         $this->assertSame('0', $row[13]);
         $this->assertSame('N/A', $row[14]);

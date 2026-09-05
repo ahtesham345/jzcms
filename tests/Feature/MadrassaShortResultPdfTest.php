@@ -9,7 +9,6 @@ use App\Models\StudentResult;
 use App\Support\GradeScale;
 use App\Support\MadrassaStudentReport;
 use App\Support\ResultReportLanguage;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\View;
@@ -1147,30 +1146,31 @@ class MadrassaShortResultPdfTest extends TestCase
     }
 
     /**
-     * The schema allows one Madrassa placement per student per session.
+     * A student may hold more than one Madrassa placement in a session.
      *
-     * Recorded as a test rather than only as a comment, because it is what
-     * decides how much progression a session-scoped Track Record can ever
-     * show. A promotion moves the student into the next session; two
-     * placements inside one session are refused by the unique index, by the
-     * promotion request's rule and by Student::promote() under its lock.
+     * This test used to assert the opposite, and its note said that if the
+     * madrassa ever needed to record a mid-session move - Qaida to Nazra to
+     * Hifz inside one year - the unique index would have to be relaxed
+     * first. It has been: a madrassa stage is finished when the student
+     * finishes it, so the placements a session-scoped Track Record shows are
+     * exactly the stages the student passed through during it.
      *
-     * If the madrassa ever needs to record a mid-session move - Qaida to
-     * Nazra to Hifz inside one year - that index has to be relaxed first,
-     * and the result module's "one result per student per session per term"
-     * rule rests on it.
+     * The result module is unaffected. A result hangs off an enrollment id
+     * and is unique on enrollment + term + test type, so each placement
+     * carries its own term results and nothing became ambiguous.
      */
-    public function test_a_second_madrassa_placement_in_one_session_is_refused(): void
+    public function test_two_madrassa_placements_in_one_session_are_recorded_separately(): void
     {
         $student = $this->student('Fawad Ahmed');
-        $this->madrassaEnrollment($student, [
+
+        $nazra = $this->madrassaEnrollment($student, [
             'academic_class_id' => $this->nazra->id,
             'section_id' => null,
+            'end_date' => '2026-09-30',
+            'status' => 'Completed',
         ]);
 
-        $this->expectException(UniqueConstraintViolationException::class);
-
-        $student->academicEnrollments()->create([
+        $hifz = $student->academicEnrollments()->create([
             'academic_session_id' => $this->session->id,
             'academic_track' => 'Madrassa',
             'department_id' => $this->hifz->id,
@@ -1179,6 +1179,23 @@ class MadrassaShortResultPdfTest extends TestCase
             'start_date' => '2026-10-01',
             'status' => 'Active',
         ]);
+
+        $this->assertSame(2, $student->academicEnrollments()->count());
+
+        // A term result on each placement: the unique index is per
+        // enrollment, so neither collides with the other.
+        $this->storedResult($nazra);
+        $this->storedResult($hifz);
+
+        // Both stages appear in the Track Record, earliest first.
+        $report = new MadrassaStudentReport($student->fresh(), $this->session);
+        $trackRecord = $report->trackRecord();
+
+        $this->assertCount(2, $trackRecord);
+        $this->assertSame($this->nazra->id, $trackRecord[0]['enrollment']->academic_class_id);
+        $this->assertSame($this->hifzClass->id, $trackRecord[1]['enrollment']->academic_class_id);
+
+        $this->assertInlinePdf($this->get(route('students.results.short-pdf', $student)));
     }
 
     /**

@@ -245,7 +245,7 @@
                         <span class="inline-flex items-center"><span class="w-3 h-3 rounded bg-green-500 mr-2"></span>Present</span>
                         <span class="inline-flex items-center"><span class="w-3 h-3 rounded bg-red-500 mr-2"></span>Absent</span>
                         <span class="inline-flex items-center"><span class="w-3 h-3 rounded bg-gray-200 border border-gray-300 mr-2"></span>Unmarked</span>
-                        <span class="inline-flex items-center"><span class="px-1 rounded bg-amber-50 text-amber-700 text-xs mr-2">OFF</span>Saturday &amp; Sunday</span>
+                        <span class="inline-flex items-center"><span class="px-1 rounded bg-amber-50 text-amber-700 text-xs mr-2">OFF</span>Sunday</span>
                     </div>
                 </div>
 

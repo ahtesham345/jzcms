@@ -338,71 +338,15 @@
                             @enderror
                         </div>
 
-                        <!-- Department -->
-                        <div>
-                            <label for="department_id" class="block text-sm font-medium text-gray-700 mb-2">
-                                Department <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="department_id" 
-                                id="department_id"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('department_id') border-red-500 @enderror"
-                            >
-                                <option value="">Select department</option>
-                                @foreach($departments as $department)
-                                    <option value="{{ $department->id }}" {{ old('department_id', $student->department_id) == $department->id ? 'selected' : '' }}>
-                                        {{ $department->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('department_id')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Academic Class -->
-                        <div>
-                            <label for="academic_class_id" class="block text-sm font-medium text-gray-700 mb-2">
-                                Academic Class <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="academic_class_id" 
-                                id="academic_class_id"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('academic_class_id') border-red-500 @enderror"
-                            >
-                                <option value="">Select academic class</option>
-                                @foreach($academicClasses as $class)
-                                    <option value="{{ $class->id }}" {{ old('academic_class_id', $student->academic_class_id) == $class->id ? 'selected' : '' }}>
-                                        {{ $class->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('academic_class_id')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Section -->
-                        <div>
-                            <label for="section_id" class="block text-sm font-medium text-gray-700 mb-2">
-                                Section <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="section_id" 
-                                id="section_id"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('section_id') border-red-500 @enderror"
-                            >
-                                <option value="">Select section</option>
-                                @foreach($sections as $section)
-                                    <option value="{{ $section->id }}" {{ old('section_id', $student->section_id) == $section->id ? 'selected' : '' }}>
-                                        {{ $section->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('section_id')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
+                        <x-student-placement-fields
+                            :student="$student"
+                            :placement-by-track="$placementByTrack"
+                            :student-types="$studentTypes"
+                            :department-names-by-id="$departmentNamesById"
+                            :department-ids-by-student-type="$departmentIdsByStudentType"
+                            :classes-by-department="$classesByDepartment"
+                            :sections-by-class="$sectionsByClass"
+                        />
 
                         <!-- Student Status -->
                         <div>
@@ -420,28 +364,6 @@
                                 <option value="Left" {{ old('student_status', $student->student_status) == 'Left' ? 'selected' : '' }}>Left</option>
                             </select>
                             @error('student_status')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <!-- Student Type -->
-                        <div>
-                            <label for="student_type" class="block text-sm font-medium text-gray-700 mb-2">
-                                Student Type <span class="text-red-500">*</span>
-                            </label>
-                            <select 
-                                name="student_type" 
-                                id="student_type"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('student_type') border-red-500 @enderror"
-                            >
-                                <option value="">Select type</option>
-                                <option value="Hifz" {{ old('student_type', $student->student_type) == 'Hifz' ? 'selected' : '' }}>Hifz</option>
-                                <option value="Hifz + School" {{ old('student_type', $student->student_type) == 'Hifz + School' ? 'selected' : '' }}>Hifz + School</option>
-                                <option value="School" {{ old('student_type', $student->student_type) == 'School' ? 'selected' : '' }}>School</option>
-                                <option value="Dars-e-Nizami + Computer" {{ old('student_type', $student->student_type) == 'Dars-e-Nizami + Computer' ? 'selected' : '' }}>Dars-e-Nizami + Computer</option>
-                                <option value="Dars-e-Nizami" {{ old('student_type', $student->student_type) == 'Dars-e-Nizami' ? 'selected' : '' }}>Dars-e-Nizami</option>
-                            </select>
-                            @error('student_type')
                                 <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                             @enderror
                         </div>
