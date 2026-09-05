@@ -18,6 +18,7 @@ class Department extends Model
         'name',
         'code',
         'description',
+        'established_date',
         'status',
     ];
 
@@ -29,6 +30,9 @@ class Department extends Model
     protected function casts(): array
     {
         return [
+            // A calendar date and nothing more: the day the department
+            // opened, with no time and no session behind it.
+            'established_date' => 'date',
             'status' => 'boolean',
         ];
     }

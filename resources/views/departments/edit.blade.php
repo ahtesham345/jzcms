@@ -91,6 +91,26 @@
                     </p>
                 </div>
 
+                <!-- Established Date -->
+                <div>
+                    <label for="established_date" class="block text-sm font-medium text-gray-700 mb-2">
+                        Established Date <span class="text-gray-400">(Optional)</span>
+                    </label>
+                    <input
+                        type="date"
+                        name="established_date"
+                        id="established_date"
+                        value="{{ old('established_date', $department->established_date?->format('Y-m-d')) }}"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 @error('established_date') border-red-500 @enderror"
+                    >
+                    @error('established_date')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-gray-500">
+                        The date when this department/program originally started.
+                    </p>
+                </div>
+
                 <!-- Status Radio Buttons -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">

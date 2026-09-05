@@ -26,6 +26,9 @@ class StoreDepartmentRequest extends FormRequest
             'name' => ['required', 'string', 'max:255', 'unique:departments,name'],
             'code' => ['required', 'string', 'max:20', 'unique:departments,code'],
             'description' => ['nullable', 'string', 'max:1000'],
+            // Optional, and historical: a department may have opened decades
+            // ago, so nothing here bounds how far back it may sit.
+            'established_date' => ['nullable', 'date'],
             'status' => ['boolean'],
         ];
     }
@@ -41,6 +44,7 @@ class StoreDepartmentRequest extends FormRequest
             'name' => 'department name',
             'code' => 'department code',
             'description' => 'description',
+            'established_date' => 'established date',
             'status' => 'status',
         ];
     }

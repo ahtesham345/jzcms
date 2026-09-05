@@ -105,6 +105,14 @@
                         @endif
                     </div>
 
+                    <!-- Established Date -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 mb-1">Established Date</label>
+                        <p class="text-base text-gray-900">
+                            {{ $department->established_date?->format('F d, Y') ?? 'Not recorded' }}
+                        </p>
+                    </div>
+
                     <!-- Created Date -->
                     <div>
                         <label class="block text-sm font-medium text-gray-500 mb-1">Created Date</label>
