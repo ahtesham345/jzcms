@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\AcademicClass;
 use App\Models\AdmissionApplication;
+use App\Models\ComputerCourse;
 use App\Models\Department;
 use App\Models\Section;
 use App\Models\Student;
@@ -20,9 +21,14 @@ use App\Models\StudentAcademicEnrollment;
  * the departments, classes and sections all come from the existing Master
  * Data tables through that mapping.
  *
- * A "side" is one half of that mapping: madrassa or school. A Hifz + School
- * student uses both, every other student type uses exactly one, and each
- * side records its enrollment against the matching academic track.
+ * A "side" is one programme of that mapping: madrassa, school or computer. A
+ * combined student type uses two of them - Hifz + School, and now
+ * Dars-e-Nizami + Computer - every other type uses exactly one, and each side
+ * records its own enrollment against the matching academic track.
+ *
+ * Computer is a side like any other. Its placement differs in one respect
+ * only: where the others record a class held for the year, Computer records
+ * which semester of its course the student is standing in.
  */
 class AcademicPlacement
 {
@@ -34,7 +40,30 @@ class AcademicPlacement
     public const SIDE_TRACKS = [
         'madrassa' => 'Madrassa',
         'school' => 'School',
+        'computer' => 'Computer',
     ];
+
+    /**
+     * The side whose progress is recorded as a course semester.
+     *
+     * The Computer programme is a course in six stages rather than a class
+     * held for a year, so its placement carries a semester alongside the
+     * department and class every side has.
+     */
+    public const SEMESTER_SIDE = 'computer';
+
+    /**
+     * The order the student row's single placement is chosen in.
+     *
+     * The students table holds one placement and a combined student has
+     * more than one, so one of them has to stand for the row. The madrassa
+     * side does when there is one - the rule the admission approval has
+     * always followed - then the school, and Computer last, because a
+     * Computer placement only ever accompanies another programme.
+     *
+     * @var array<int, string>
+     */
+    private const PRIMARY_SIDE_ORDER = ['madrassa', 'school', 'computer'];
 
     /**
      * Get the request field each part of a side's placement is posted under.
@@ -63,6 +92,32 @@ class AcademicPlacement
             'academic_class_id' => $side.'_class_id',
             'section_id' => $side.'_section_id',
         ];
+    }
+
+    /**
+     * Get every department name the student type mapping resolves against.
+     *
+     * Derived from the mapping rather than listed again, so the Master Data
+     * guidance that names these departments cannot drift from the rule it
+     * explains. Distinct and in mapping order: Hifz + School contributes the
+     * same two names its two sides already do, not a third combined one.
+     *
+     * Read only. Nothing here decides a placement or changes what the
+     * mapping accepts.
+     *
+     * @return array<int, string>
+     */
+    public static function requiredDepartmentNames(): array
+    {
+        $names = [];
+
+        foreach (AdmissionApplication::STUDENT_TYPE_DEPARTMENTS as $sides) {
+            foreach ($sides as $departmentName) {
+                $names[$departmentName] = true;
+            }
+        }
+
+        return array_keys($names);
     }
 
     /**
@@ -197,6 +252,16 @@ class AcademicPlacement
                 ->get(['id', 'name', 'academic_class_id'])
                 ->groupBy('academic_class_id')
                 ->map(fn ($sections) => $sections->map->only(['id', 'name'])->values()),
+            // The stages of the Computer course, in teaching order. Offered
+            // only on the Computer side of a placement; every other side is
+            // described by its class.
+            'computerSemesters' => ComputerCourse::current()
+                ?->semesters()
+                ->where('status', true)
+                ->get(['id', 'name'])
+                ->map->only(['id', 'name'])
+                ->values()
+                ->all() ?? [],
         ];
     }
 
@@ -224,10 +289,51 @@ class AcademicPlacement
                 'department_id' => (int) $data[$fields['department_id']],
                 'academic_class_id' => (int) $data[$fields['academic_class_id']],
                 'section_id' => ($section === null || $section === '') ? null : (int) $section,
+                // Only the Computer side carries one. Every other placement
+                // is described by its class, and passing a semester with one
+                // would put a Computer stage on a Madrassa enrollment.
+                'computer_course_semester_id' => $side === self::SEMESTER_SIDE
+                    ? self::semesterFromValidated($data)
+                    : null,
             ];
         }
 
         return $placements;
+    }
+
+    /**
+     * Get the request field a Computer placement's semester is posted under.
+     */
+    public static function semesterField(): string
+    {
+        return self::SEMESTER_SIDE.'_semester_id';
+    }
+
+    /**
+     * Read the chosen Computer semester, falling back to the first stage.
+     *
+     * A student joining the Computer programme starts at its first semester
+     * unless the admin says otherwise, which is the confirmed rule for a new
+     * Computer student. The fallback is a real semester record read from the
+     * configured course, never the words "1st Semester", so the placement
+     * points at the stage the admin actually set up.
+     *
+     * Null when the Computer course has not been configured at all. The
+     * placement is still written - a student is in the Computer department
+     * either way - and the semester is left to be set once the course
+     * exists, rather than the enrollment being refused or invented.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function semesterFromValidated(array $data): ?int
+    {
+        $chosen = $data[self::semesterField()] ?? null;
+
+        if ($chosen !== null && $chosen !== '') {
+            return (int) $chosen;
+        }
+
+        return ComputerCourse::startingSemester()?->id;
     }
 
     /**
@@ -242,7 +348,13 @@ class AcademicPlacement
      */
     public static function primary(array $placements): ?array
     {
-        return $placements['madrassa'] ?? $placements['school'] ?? null;
+        foreach (self::PRIMARY_SIDE_ORDER as $side) {
+            if (isset($placements[$side])) {
+                return $placements[$side];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -259,7 +371,8 @@ class AcademicPlacement
         int $academicClassId,
         ?int $sectionId,
         string $startDate,
-        int $academicSessionId
+        int $academicSessionId,
+        ?int $computerCourseSemesterId = null
     ): StudentAcademicEnrollment {
         return StudentAcademicEnrollment::create([
             'student_id' => $student->id,
@@ -268,8 +381,56 @@ class AcademicPlacement
             'department_id' => $departmentId,
             'academic_class_id' => $academicClassId,
             'section_id' => $sectionId,
+            // Only ever set on a Computer placement. The session above is
+            // still recorded, because the column requires one and because
+            // the placement did begin in some year - but it is the semester
+            // that says where the student is in the course, and a new
+            // session does not move it.
+            'computer_course_semester_id' => $computerCourseSemesterId,
             'start_date' => $startDate,
             'status' => 'Active',
         ]);
+    }
+
+    /**
+     * Get the Computer placement a student type carries, if it carries one.
+     *
+     * Everything a Computer enrollment needs that is not the student's own
+     * choice: the department the mapping names, the single class the
+     * Computer department runs its course as, and the semester to start in.
+     *
+     * Null when the student type has no Computer side, and null when the
+     * Computer department or its course has not been set up - in which case
+     * the caller writes no Computer placement rather than an incomplete one.
+     *
+     * @return array{department_id: int, academic_class_id: int, section_id: null, computer_course_semester_id: int|null}|null
+     */
+    public static function computerPlacementFor(?string $studentType): ?array
+    {
+        if (! in_array(self::SEMESTER_SIDE, self::sides($studentType), true)) {
+            return null;
+        }
+
+        $departmentId = self::departmentId($studentType, self::SEMESTER_SIDE);
+
+        if ($departmentId === null) {
+            return null;
+        }
+
+        $class = AcademicClass::where('department_id', $departmentId)
+            ->where('status', true)
+            ->orderBy('id')
+            ->first();
+
+        if ($class === null) {
+            return null;
+        }
+
+        return [
+            'department_id' => $departmentId,
+            'academic_class_id' => (int) $class->id,
+            'section_id' => null,
+            'computer_course_semester_id' => ComputerCourse::startingSemester()?->id,
+        ];
     }
 }

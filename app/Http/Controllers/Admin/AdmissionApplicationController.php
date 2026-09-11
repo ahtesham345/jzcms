@@ -294,6 +294,36 @@ class AdmissionApplicationController extends Controller
             $created = true;
         }
 
+        // The Computer placement, for a student type that carries one.
+        //
+        // Nothing about it is asked on the application form and nothing needs
+        // to be: the Computer department runs a single course, and a new
+        // student starts at its first semester. So the placement is derived
+        // from the student type rather than chosen, which is why the public
+        // form gained no Computer question.
+        //
+        // Null when the Computer department or its course has not been set up
+        // yet. The rest of the approval still stands - the student is
+        // admitted and their madrassa placement recorded - and the Computer
+        // placement is added once the master data exists, rather than the
+        // approval failing or an invented placement being written.
+        $computer = AcademicPlacement::computerPlacementFor($application->student_type);
+
+        if ($computer !== null) {
+            $this->createEnrollment(
+                $student,
+                AcademicPlacement::track(AcademicPlacement::SEMESTER_SIDE),
+                $computer['department_id'],
+                $computer['academic_class_id'],
+                $computer['section_id'],
+                $placement['admission_date'],
+                $placement['academic_session_id'],
+                $computer['computer_course_semester_id']
+            );
+
+            $created = true;
+        }
+
         if ($created) {
             return;
         }
@@ -363,7 +393,8 @@ class AdmissionApplicationController extends Controller
         int $academicClassId,
         ?int $sectionId,
         string $startDate,
-        int $academicSessionId
+        int $academicSessionId,
+        ?int $computerCourseSemesterId = null
     ): void {
         AcademicPlacement::recordEnrollment(
             $student,
@@ -372,7 +403,8 @@ class AdmissionApplicationController extends Controller
             $academicClassId,
             $sectionId,
             $startDate,
-            $academicSessionId
+            $academicSessionId,
+            $computerCourseSemesterId
         );
     }
 

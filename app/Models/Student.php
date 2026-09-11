@@ -89,7 +89,7 @@ class Student extends Model
     {
         return $this->hasMany(StudentAcademicEnrollment::class)
             ->where('status', 'Active')
-            ->orderBy('academic_track');
+            ->inTrackOrder();
     }
 
     /**
@@ -101,6 +101,40 @@ class Student extends Model
             ->where('academic_track', $track)
             ->where('status', 'Active')
             ->first();
+    }
+
+    /**
+     * Get the class of every current placement, as one line.
+     *
+     * The students table holds a single placement - the madrassa side for
+     * a dual-track student - so reading academic_class_id alone shows only
+     * half of a Hifz + School student. The enrollments are what actually
+     * record where a student is, one row per track, so this reads those.
+     *
+     * The order is the relationship's own: academic_track sorts Madrassa
+     * before School, which is the order a placement is read in. Nothing is
+     * sorted again here.
+     *
+     * The flat column is the fallback, not the source. A student recorded
+     * before the enrollments existed, or one whose enrollments have all
+     * been closed, still shows the class on their own row rather than an
+     * empty cell.
+     */
+    public function placementClassNames(): string
+    {
+        $names = $this->activeAcademicEnrollments
+            // Each placement in the terms its own programme uses: a class for
+            // the madrassa and the school, the course semester for Computer,
+            // whose progress is measured in semesters rather than classes.
+            ->map(fn (StudentAcademicEnrollment $enrollment) => $enrollment->stageName())
+            ->filter()
+            ->values();
+
+        if ($names->isEmpty()) {
+            return (string) $this->academicClass?->name;
+        }
+
+        return $names->join(', ');
     }
 
     /**

@@ -67,7 +67,7 @@ class StoreAttendanceSheetRequest extends FormRequest
             // every submitted row can be checked against it, and so the
             // redirect can reopen the same month.
             'academic_session_id' => ['required', 'integer', 'exists:academic_sessions,id'],
-            'academic_track' => ['required', Rule::in(StudentAcademicEnrollment::ACADEMIC_TRACKS)],
+            'academic_track' => ['required', Rule::in(StudentAcademicEnrollment::attendanceTracks())],
             'department_id' => ['required', 'integer', 'exists:departments,id'],
             'academic_class_id' => ['required', 'integer', 'exists:academic_classes,id'],
             'section_id' => ['nullable', 'integer', 'exists:sections,id'],
@@ -86,7 +86,7 @@ class StoreAttendanceSheetRequest extends FormRequest
                     // A first pass against the selected track, so the error
                     // names the track the admin chose. The authoritative
                     // check is per enrollment, in withValidator() below.
-                    if (in_array($track, StudentAcademicEnrollment::ACADEMIC_TRACKS, true)
+                    if (in_array($track, StudentAcademicEnrollment::attendanceTracks(), true)
                         && ! StudentAttendance::periodAllowedForTrack($value, $track)) {
                         $allowed = implode(', ', StudentAttendance::periodsForTrack($track));
                         $fail("{$track} attendance is only recorded in the {$allowed} period.");

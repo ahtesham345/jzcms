@@ -64,34 +64,40 @@
             margin-bottom: 4mm;
         }
 
-        /* The institution letterhead. A borderless table so dompdf lays the
-           logo beside the name without a float, and so the block costs the
-           few millimetres it looks like rather than a page. */
+        /* The institution letterhead. A borderless table so dompdf stacks
+           the logo over the name without a float, and so the block costs
+           the few millimetres it looks like rather than a page. */
         table.institution-bar {
             width: 100%;
             border-collapse: collapse;
-            margin: 0 0 2mm 0;
+            margin: 0 0 4mm 0;
         }
 
+        /* Centred on the sheet: the logo sits over the name rather than
+           beside it, and text-align is what dompdf centres an inline image
+           with - it has no flexbox, and margin:auto does not apply. */
         table.institution-bar td {
             border: none;
             padding: 0;
             vertical-align: middle;
+            text-align: center;
         }
 
+        /* The gap between the logo and the name below it, carried as
+           padding on the cell because dompdf drops a vertical margin on an
+           inline image. */
         td.institution-logo-cell {
-            width: 18mm;
-            padding-right: 3mm;
+            padding-bottom: 4mm;
         }
 
         /* Bounded on both axes and fixed on neither, so the logo is scaled
            down to fit and never stretched. Measured: with a fixed height
            plus a max-width, dompdf squashes a wide logo to the box - a
-           4000x800 mark came out 18mm x 14mm. With two maxima the same
-           mark comes out 18mm x 3.6mm, which is its own shape. */
+           4000x800 mark came out filling it. With two maxima the same
+           mark comes out 55mm x 11mm, which is its own shape. */
         img.institution-logo {
-            max-height: 14mm;
-            max-width: 18mm;
+            max-height: 20mm;
+            max-width: 55mm;
         }
 
         h1.institution-name { font-size: 15px; margin: 0; }

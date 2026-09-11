@@ -13,12 +13,70 @@ class StudentAcademicEnrollment extends Model
     /**
      * The selectable academic tracks.
      *
+     * Three programmes the institution places a student into. Computer
+     * joined them when it became a department in its own right: a
+     * Dars-e-Nizami + Computer student holds one enrollment per programme,
+     * exactly as a Hifz + School student does.
+     *
      * @var array<int, string>
      */
     public const ACADEMIC_TRACKS = [
         'Madrassa',
         'School',
+        'Computer',
     ];
+
+    /**
+     * The track whose progress is measured in course semesters.
+     *
+     * The Computer programme is a three-year course divided into six
+     * semesters, so where a Computer student is up to is the semester they
+     * are standing in rather than a class they sit in for a year. Every
+     * other track uses the academic class.
+     */
+    public const SEMESTER_TRACK = 'Computer';
+
+    /**
+     * The order a student's placements are read in.
+     *
+     * The programme the student row itself stands for comes first, then the
+     * school, then Computer - which only ever accompanies another programme.
+     * Alphabetical order used to give the same answer while there were two
+     * tracks; with Computer added it would put the accompanying programme
+     * before the main one.
+     *
+     * @var array<int, string>
+     */
+    public const TRACK_READING_ORDER = [
+        'Madrassa',
+        'School',
+        'Computer',
+    ];
+
+    /**
+     * The tracks that take an attendance register.
+     *
+     * Attendance is defined for the madrassa and the school, and each of
+     * them has periods in StudentAttendance::PERIODS_BY_TRACK saying when
+     * their register is taken. No Computer attendance has been defined, so
+     * Computer is absent here and the attendance screens do not offer it -
+     * offering a track with no periods would draw a sheet with no columns
+     * to mark.
+     *
+     * This says nothing about whether Computer attendance should exist. It
+     * records that it does not yet, in the one place the attendance screens
+     * read, so that adding it later is a matter of giving the track periods
+     * rather than hunting for the filters that hide it.
+     *
+     * @return array<int, string>
+     */
+    public static function attendanceTracks(): array
+    {
+        return array_values(array_filter(
+            self::ACADEMIC_TRACKS,
+            fn (string $track) => StudentAttendance::periodsForTrack($track) !== []
+        ));
+    }
 
     /**
      * The tracks that allow only one enrollment per academic session.
@@ -76,6 +134,7 @@ class StudentAcademicEnrollment extends Model
         'department_id',
         'academic_class_id',
         'section_id',
+        'computer_course_semester_id',
         'start_date',
         'end_date',
         'status',
@@ -131,6 +190,33 @@ class StudentAcademicEnrollment extends Model
      *
      * @param  array<int, string>  $terms
      */
+    /**
+     * Order placements the way a student's placement is read.
+     *
+     * The tracks in TRACK_READING_ORDER rather than alphabetically, because
+     * the column holds names and the order they should be read in is not
+     * their alphabet. Written as a case expression for the same reason
+     * StudentAttendance orders its periods that way.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeInTrackOrder(Builder $query): Builder
+    {
+        $cases = [];
+        $bindings = [];
+
+        foreach (self::TRACK_READING_ORDER as $position => $track) {
+            $cases[] = 'when ? then '.($position + 1);
+            $bindings[] = $track;
+        }
+
+        return $query->orderByRaw(
+            'case academic_track '.implode(' ', $cases).' else '.(count(self::TRACK_READING_ORDER) + 1).' end',
+            $bindings
+        );
+    }
+
     public function scopeForResultReport(Builder $query, array $terms): Builder
     {
         return $query->where(function (Builder $query) use ($terms) {
@@ -191,6 +277,40 @@ class StudentAcademicEnrollment extends Model
     public function academicClass()
     {
         return $this->belongsTo(AcademicClass::class);
+    }
+
+    /**
+     * Get the Computer semester this placement is standing in.
+     *
+     * Null on every track but Computer, and null on a Computer placement
+     * whose semester has not been set - a student moved across from before
+     * Computer was a department, for instance. Read it, do not assume it.
+     */
+    public function computerCourseSemester()
+    {
+        return $this->belongsTo(ComputerCourseSemester::class);
+    }
+
+    /**
+     * Determine whether this placement's progress is measured in semesters.
+     */
+    public function usesSemesters(): bool
+    {
+        return $this->academic_track === self::SEMESTER_TRACK;
+    }
+
+    /**
+     * Get where this placement stands, in the terms its own track uses.
+     *
+     * A Computer placement is described by its semester and every other by
+     * its class, so a listing can name a student's stage without knowing
+     * which programme it is looking at.
+     */
+    public function stageName(): ?string
+    {
+        return $this->usesSemesters()
+            ? $this->computerCourseSemester?->name
+            : $this->academicClass?->name;
     }
 
     /**

@@ -20,9 +20,9 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm font-medium text-gray-600 mb-1">Total Students</p>
-                    <p class="text-3xl font-bold text-gray-900">1,234</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ number_format($studentStats['total']) }}</p>
                     <p class="text-sm text-green-600 mt-2">
-                        <span class="font-medium">+12</span> this month
+                        <span class="font-medium">+{{ number_format($studentStats['joined_this_month']) }}</span> this month
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -38,9 +38,9 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm font-medium text-gray-600 mb-1">Total Teachers</p>
-                    <p class="text-3xl font-bold text-gray-900">89</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ number_format($teacherStats['total']) }}</p>
                     <p class="text-sm text-green-600 mt-2">
-                        <span class="font-medium">+3</span> this month
+                        <span class="font-medium">+{{ number_format($teacherStats['joined_this_month']) }}</span> this month
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -56,9 +56,13 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm font-medium text-gray-600 mb-1">Today's Attendance</p>
-                    <p class="text-3xl font-bold text-gray-900">94.5%</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ $attendanceStats['percentage'] }}</p>
                     <p class="text-sm text-green-600 mt-2">
-                        <span class="font-medium">1,167</span> present
+                        @if($attendanceStats['is_teaching_day'])
+                            <span class="font-medium">{{ number_format($attendanceStats['present']) }}</span> present
+                        @else
+                            Weekly off day
+                        @endif
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -74,9 +78,9 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm font-medium text-gray-600 mb-1">Pending Fees</p>
-                    <p class="text-3xl font-bold text-gray-900">Rs. 45,000</p>
-                    <p class="text-sm text-red-600 mt-2">
-                        <span class="font-medium">23</span> students
+                    <p class="text-3xl font-bold text-gray-900">&mdash;</p>
+                    <p class="text-sm text-gray-500 mt-2">
+                        Fees module not set up
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -92,7 +96,7 @@
     <div class="bg-white rounded-lg shadow-sm p-6">
         <h4 class="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h4>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <a href="#" class="flex items-center p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all">
+            <a href="{{ route('students.create') }}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all">
                 <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
                     <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
@@ -116,7 +120,7 @@
                 </div>
             </a>
 
-            <a href="#" class="flex items-center p-4 border border-gray-200 rounded-lg hover:border-purple-500 hover:shadow-md transition-all">
+            <a href="{{ route('results.reports') }}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:border-purple-500 hover:shadow-md transition-all">
                 <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
                     <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>

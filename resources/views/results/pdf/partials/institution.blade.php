@@ -39,18 +39,29 @@
 {{-- A borderless table, not floats. dompdf mishandles floated blocks
      inside the flow of a long report - that is what once turned this
      document into eleven pages - and mPDF lays a table out the same way in
-     both directions, so one structure serves both engines. --}}
+     both directions, so one structure serves both engines.
+
+     Stacked rather than side by side: the logo heads the sheet on its own
+     row and the name follows underneath it, both centred by text-align on
+     the cell. text-align is the one centring instruction both engines
+     honour reliably - dompdf has no flexbox, and margin:auto does not
+     centre an inline image - so the letterhead is built out of it rather
+     than out of anything either renderer would ignore. --}}
 <table class="institution-bar">
-    <tr>
-        @if($institutionLogo)
+    @if($institutionLogo)
+        <tr>
+            {{-- The logo's own row, with the gap to the name below carried
+                 by the cell's padding rather than by a margin on the image:
+                 dompdf drops vertical margins on an inline image, and
+                 padding on the cell it sits in it does honour. --}}
             <td class="institution-logo-cell">
-                {{-- Height only, so the width follows the image's own
-                     proportions and the logo is never stretched. Small
-                     enough that it heads the report rather than dominating
-                     it. --}}
+                {{-- Bounded on both axes and fixed on neither, so the logo
+                     is scaled down into the box and never stretched. --}}
                 <img src="{{ $institutionLogo }}" alt="" class="institution-logo">
             </td>
-        @endif
+        </tr>
+    @endif
+    <tr>
         <td class="institution-text-cell">
             <h1 class="institution-name">{{ $institution->brandName($institutionLanguage) }}</h1>
             @if($institutionTagline !== '')

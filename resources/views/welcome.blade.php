@@ -26,7 +26,7 @@
                 @if($institution->hasLogo())
                     <img src="{{ $institution->logoUrl() }}"
                          alt="{{ $institution->brandName() }}"
-                         class="max-h-24 max-w-sm w-auto object-contain mx-auto mb-6">
+                         class="max-h-32 sm:max-h-40 max-w-xs sm:max-w-md w-auto object-contain mx-auto mb-8">
                 @endif
                 <h1 class="text-4xl font-bold text-gray-800 mb-4">{{ $institution->brandName() }}</h1>
                 @if($institution->taglineLine() !== '')

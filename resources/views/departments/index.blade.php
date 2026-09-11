@@ -16,6 +16,9 @@
         </div>
     @endif
 
+    <!-- How departments must be set up for the student type mapping -->
+    <x-department-setup-notice />
+
     <div class="bg-white rounded-lg shadow-sm">
         <!-- Header Section -->
         <div class="px-6 py-4 border-b border-gray-200">

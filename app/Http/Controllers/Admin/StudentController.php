@@ -5,17 +5,15 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreStudentRequest;
 use App\Http\Requests\Admin\UpdateStudentRequest;
-use App\Models\AcademicClass;
 use App\Models\AcademicSession;
 use App\Models\AdmissionApplication;
-use App\Models\Department;
 use App\Models\DisciplineRecord;
 use App\Models\MadrassaDailyRecord;
 use App\Models\ParentGuardian;
-use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentResult;
 use App\Support\AcademicPlacement;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +25,18 @@ class StudentController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Student::with(['academicSession', 'department', 'academicClass', 'section']);
+        $query = Student::with([
+            'academicSession',
+            'department',
+            'academicClass',
+            'section',
+            // The Class column reads every current placement, so a
+            // Hifz + School student shows both of theirs. Loaded with
+            // the enrollments rather than per row: two more queries for
+            // the page, not two per student.
+            'activeAcademicEnrollments.academicClass',
+            'activeAcademicEnrollments.computerCourseSemester',
+        ]);
 
         // Search
         if ($request->filled('search')) {
@@ -45,19 +54,34 @@ class StudentController extends Controller
             $query->where('academic_session_id', $request->academic_session_id);
         }
 
-        // Filter by Department
-        if ($request->filled('department_id')) {
-            $query->where('department_id', $request->department_id);
-        }
+        // Placement filters read the enrollments, never the student row.
+        // The row holds a single placement - the madrassa one for a
+        // dual-track student - so filtering it hid every Hifz + School
+        // student from the School department, its classes and its sections.
+        //
+        // All three conditions go inside one whereHas, so they have to be
+        // satisfied by the same enrollment. "Hifz + Class 7" therefore means
+        // one placement that is both, never a student who is in Hifz on one
+        // track and in Class 7 on the other.
+        //
+        // activeAcademicEnrollments() carries the project's own definition
+        // of a current placement, so a completed enrollment cannot make a
+        // student answer a filter about where they are now.
+        $placement = array_filter(
+            [
+                'department_id' => $request->input('department_id'),
+                'academic_class_id' => $request->input('academic_class_id'),
+                'section_id' => $request->input('section_id'),
+            ],
+            fn ($value) => $value !== null && $value !== ''
+        );
 
-        // Filter by Academic Class
-        if ($request->filled('academic_class_id')) {
-            $query->where('academic_class_id', $request->academic_class_id);
-        }
-
-        // Filter by Section
-        if ($request->filled('section_id')) {
-            $query->where('section_id', $request->section_id);
+        if ($placement !== []) {
+            $query->whereHas('activeAcademicEnrollments', function (Builder $enrollment) use ($placement) {
+                foreach ($placement as $column => $value) {
+                    $enrollment->where($column, $value);
+                }
+            });
         }
 
         // Filter by Student Status
@@ -72,13 +96,16 @@ class StudentController extends Controller
 
         $students = $query->latest()->paginate(10)->withQueryString();
 
-        // Get filter options
-        $academicSessions = AcademicSession::where('status', true)->orderBy('name')->get();
-        $departments = Department::where('status', true)->orderBy('name')->get();
-        $academicClasses = AcademicClass::where('status', true)->orderBy('name')->get();
-        $sections = Section::where('status', true)->orderBy('name')->get();
-
-        return view('students.index', compact('students', 'academicSessions', 'departments', 'academicClasses', 'sections'));
+        return view('students.index', [
+            'students' => $students,
+            'academicSessions' => AcademicSession::where('status', true)->orderBy('name')->get(),
+            // Department -> class -> section, the same maps the Add Student
+            // form narrows its placement selects with. The filter row narrows
+            // the same way rather than keeping a second copy of them, so a
+            // class can never be offered under a department it does not
+            // belong to.
+            ...AcademicPlacement::formOptions(),
+        ]);
     }
 
     /**
@@ -166,6 +193,7 @@ class StudentController extends Controller
                     $placement['section_id'],
                     $data['admission_date'],
                     (int) $data['academic_session_id'],
+                    $placement['computer_course_semester_id'] ?? null,
                 );
             }
 
@@ -378,6 +406,7 @@ class StudentController extends Controller
                 $placement['section_id'],
                 $data['admission_date'],
                 $sessionId,
+                $placement['computer_course_semester_id'] ?? null,
             );
 
             return;
@@ -397,7 +426,19 @@ class StudentController extends Controller
             'department_id' => $placement['department_id'],
             'academic_class_id' => $placement['academic_class_id'],
             'section_id' => $placement['section_id'],
-            ...($sessionTaken ? [] : ['academic_session_id' => $sessionId]),
+            // Only a Computer placement carries one. The key is absent
+            // on every other side, so nothing else is touched.
+            ...(array_key_exists('computer_course_semester_id', $placement)
+                ? ['computer_course_semester_id' => $placement['computer_course_semester_id']]
+                : []),
+            // A semester-track placement keeps the session it began in. The
+            // Computer course runs across about three academic sessions, so
+            // its session is the year the student started the course and not
+            // the year the placement belongs to - moving it when the student
+            // is filed into a new session would erase when they began. Where
+            // the student stands in the course is the semester above, which
+            // no session change touches.
+            ...(($sessionTaken || $enrollment->usesSemesters()) ? [] : ['academic_session_id' => $sessionId]),
         ]);
     }
 

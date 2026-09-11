@@ -7,6 +7,7 @@ use App\Models\AcademicSession;
 use App\Models\AdmissionApplication;
 use App\Models\Department;
 use App\Models\Setting;
+use App\Support\StudentTerms;
 use Illuminate\Http\Response;
 
 /**
@@ -29,6 +30,12 @@ class PublicAdmissionController extends Controller
 
         return view('public.admissions.apply', [
             'classesByDepartment' => $this->classesByDepartment(),
+            // Every student type's instructions, resolved here rather
+            // than in the browser: the departments a type places into
+            // and the rule for combining two of them both live in the
+            // application, and neither is restated in JavaScript.
+            'termsByStudentType' => StudentTerms::byStudentType(),
+            'defaultTerms' => StudentTerms::defaults(),
             // Shown on the form so an applicant can see which year they are
             // applying for. It is displayed, never posted: the session saved
             // against the application is resolved again server side when the

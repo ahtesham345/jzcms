@@ -81,7 +81,7 @@ class AttendanceReportController extends Controller
             'summary' => $this->summary($filters, $periods, $start, $end),
             'groupSummary' => $this->groupSummary($filters, $periods, $start, $end),
             'periodSummary' => $this->periodSummary($filters, $periods, $start, $end),
-            'academicTracks' => StudentAcademicEnrollment::ACADEMIC_TRACKS,
+            'academicTracks' => StudentAcademicEnrollment::attendanceTracks(),
             'availablePeriods' => StudentAttendance::periodsForTrack($filters['academic_track']),
             'allPeriodsValue' => self::ALL_PERIODS,
             'sorts' => array_keys(self::SORTS),
@@ -210,9 +210,9 @@ class AttendanceReportController extends Controller
         $today = Carbon::now();
 
         $track = $request->input('academic_track');
-        $track = in_array($track, StudentAcademicEnrollment::ACADEMIC_TRACKS, true)
+        $track = in_array($track, StudentAcademicEnrollment::attendanceTracks(), true)
             ? $track
-            : StudentAcademicEnrollment::ACADEMIC_TRACKS[0];
+            : StudentAcademicEnrollment::attendanceTracks()[0];
 
         $sort = $request->input('sort');
         $direction = strtolower((string) $request->input('direction'));

@@ -933,7 +933,7 @@
 
                         {{-- Read only: displayed for reference, never editable here. --}}
                         <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                            <x-admission-instructions />
+                            <x-admission-instructions :student="$student" />
                         </div>
                     </div>
 

@@ -21,7 +21,7 @@
         // asking for it too costs no further query.
         $institution = \App\Models\Setting::current();
     @endphp
-    <div class="flex items-center justify-between h-16 px-6 bg-gray-800">
+    <div class="flex items-center justify-between h-16 px-4 bg-gray-800">
         {{-- The logo when one has been uploaded and the file is still
              there, the institution's name when not, and the project's own
              name behind that. hasLogo() checks the file, so a path whose
@@ -40,7 +40,7 @@
                      screen reader and a failed image both get. --}}
                 <img src="{{ $institution->logoUrl() }}"
                      alt="{{ $institution->brandName() }}"
-                     class="max-h-10 max-w-full w-auto object-contain">
+                     class="max-h-14 max-w-full w-auto object-contain">
             @else
                 <span class="text-base font-bold text-white leading-tight truncate">
                     {{ $institution->brandName() }}
@@ -147,6 +147,18 @@
             :active="request()->routeIs('hifz.*')"
             icon="sparkles">
             Hifz & Quran
+        </x-layout.sidebar-item>
+
+        <!-- Computer Course -->
+        {{-- The Computer department's own structure: one course in six
+             semesters, with the dates and curriculum an admin configures.
+             Top level, beside the other academic modules, because it is
+             what the Computer programme is rather than a setting. --}}
+        <x-layout.sidebar-item
+            href="{{ route('computer-course.index') }}"
+            :active="request()->routeIs('computer-course.*')"
+            icon="computer-desktop">
+            Computer Course
         </x-layout.sidebar-item>
 
         <!-- Results -->

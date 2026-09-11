@@ -68,7 +68,7 @@ class AttendanceController extends Controller
         $data = [
             'filters' => $filters,
             'availablePeriods' => $availablePeriods,
-            'academicTracks' => StudentAcademicEnrollment::ACADEMIC_TRACKS,
+            'academicTracks' => StudentAcademicEnrollment::attendanceTracks(),
             // Suggestions for the reason dialog. The reason itself is free
             // text, so these narrow nothing: they only save typing.
             'absenceReasons' => StudentAttendance::ABSENCE_REASONS,
@@ -311,7 +311,7 @@ class AttendanceController extends Controller
 
         return [
             'academic_session_id' => $this->cleaned($request->input('academic_session_id')),
-            'academic_track' => in_array($track, StudentAcademicEnrollment::ACADEMIC_TRACKS, true) ? $track : null,
+            'academic_track' => in_array($track, StudentAcademicEnrollment::attendanceTracks(), true) ? $track : null,
             'department_id' => $this->cleaned($request->input('department_id')),
             'academic_class_id' => $this->cleaned($request->input('academic_class_id')),
             'section_id' => $this->cleaned($request->input('section_id')),

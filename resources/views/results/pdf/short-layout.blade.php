@@ -76,30 +76,36 @@
         table.institution-bar {
             width: 100%;
             border-collapse: collapse;
-            margin: 0 0 1.5mm 0;
+            margin: 0 0 3mm 0;
         }
 
+        /* Centred, which is also why the cell needs no direction-aware
+           gutter any more: the logo sits over the name in both languages
+           rather than beside it. text-align is what both engines centre an
+           inline image with - dompdf has no flexbox and does not apply
+           margin:auto to one. */
         table.institution-bar td {
             border: none;
             padding: 0;
             vertical-align: middle;
+            text-align: center;
         }
 
+        /* The gap between the logo and the name below it, carried as
+           padding on the cell because dompdf drops a vertical margin on an
+           inline image. */
         td.institution-logo-cell {
-            width: 18mm;
-            /* The gutter follows the reading direction, so the logo sits
-               beside the name rather than jammed against it in Urdu. */
-            padding-{{ $rtl ? 'left' : 'right' }}: 3mm;
+            padding-bottom: 4mm;
         }
 
         /* Bounded on both axes and fixed on neither, so the logo is scaled
            down to fit and never stretched. Measured: with a fixed height
            plus a max-width, dompdf squashes a wide logo to the box - a
-           4000x800 mark came out 18mm x 14mm. With two maxima the same
-           mark comes out 18mm x 3.6mm, which is its own shape. */
+           4000x800 mark came out filling it. With two maxima the same
+           mark comes out 60mm x 12mm, which is its own shape. */
         img.institution-logo {
-            max-height: 15mm;
-            max-width: 18mm;
+            max-height: 22mm;
+            max-width: 60mm;
         }
 
         h1.institution-name { font-size: 18px; margin: 0; }

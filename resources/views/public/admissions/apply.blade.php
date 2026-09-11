@@ -4,6 +4,15 @@
         x-data="{
             studentType: '{{ old('student_type') }}',
             classesByDepartment: {{ Js::from($classesByDepartment) }},
+            // Resolved on the server, one list per student type, already
+            // combined and de-duplicated. The browser only picks a list;
+            // the student-type mapping and the combining rule are not
+            // repeated here, where they could drift from AcademicPlacement.
+            termsByStudentType: {{ Js::from($termsByStudentType) }},
+            defaultTerms: {{ Js::from($defaultTerms) }},
+            terms() {
+                return this.termsByStudentType[this.studentType] ?? this.defaultTerms
+            },
             departmentsByType: {{ Js::from(\App\Models\AdmissionApplication::STUDENT_TYPE_DEPARTMENTS) }},
             departmentFor(side) { return (this.departmentsByType[this.studentType] ?? {})[side] ?? null },
             classesFor(side) {
@@ -348,7 +357,28 @@
                 <h3 class="text-lg font-semibold text-gray-800 mb-3">Important Instructions</h3>
 
                 <div class="border border-gray-200 rounded-lg p-4 bg-gray-50 max-h-80 overflow-y-auto">
-                    <x-admission-instructions />
+                    {{-- Rendered in the browser rather than by the component,
+                         because the applicant chooses their student type on
+                         this same page and the instructions follow it. The
+                         lists are resolved on the server - one per student
+                         type, already combined and de-duplicated - so what
+                         changes here is only which of them is shown. Before a
+                         type is chosen the institution's defaults stand, so
+                         the section is never empty. --}}
+                    <div dir="rtl" lang="ur" class="text-right">
+                        <h4 class="text-base font-bold text-gray-900 mb-3 leading-loose">
+                            {{ \App\Support\StudentTerms::heading() }}
+                        </h4>
+
+                        <ul class="space-y-2 list-none">
+                            <template x-for="(instruction, index) in terms()" :key="index">
+                                <li class="flex items-start text-gray-800 leading-loose">
+                                    <span class="ml-2 select-none">&bull;</span>
+                                    <span x-text="instruction"></span>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
                 </div>
 
                 <!-- Agreement -->
@@ -364,7 +394,7 @@
                             class="mt-1 h-4 w-4 flex-shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 @error('instructions_accepted') border-red-500 @enderror"
                         >
                         <span dir="rtl" lang="ur" class="mr-3 text-gray-800 leading-loose text-right">
-                            {{ config('admission_instructions.agreement') }}
+                            {{ \App\Support\StudentTerms::agreement() }}
                             <span class="text-red-500">*</span>
                         </span>
                     </label>

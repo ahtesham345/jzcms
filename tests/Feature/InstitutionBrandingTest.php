@@ -442,9 +442,9 @@ class InstitutionBrandingTest extends TestCase
         // to the box and printed a 5:1 logo at roughly 1.3:1.
         $this->assertEqualsWithDelta(5.0, $width / $height, 0.25);
 
-        // And still inside the letterhead box: 18mm x 15mm in points.
-        $this->assertLessThanOrEqual(18 / 25.4 * 72 + 1, $width);
-        $this->assertLessThanOrEqual(15 / 25.4 * 72 + 1, $height);
+        // And still inside the letterhead box: 60mm x 22mm in points.
+        $this->assertLessThanOrEqual(60 / 25.4 * 72 + 1, $width);
+        $this->assertLessThanOrEqual(22 / 25.4 * 72 + 1, $height);
     }
 
     public function test_a_tall_logo_is_not_distorted_in_the_pdf(): void
@@ -461,7 +461,7 @@ class InstitutionBrandingTest extends TestCase
         [$width, $height] = $this->drawnImageSize($pdf);
 
         $this->assertEqualsWithDelta(0.2, $width / $height, 0.05);
-        $this->assertLessThanOrEqual(15 / 25.4 * 72 + 1, $height);
+        $this->assertLessThanOrEqual(22 / 25.4 * 72 + 1, $height);
     }
 
     public function test_the_letterhead_does_not_add_pages_to_a_report(): void

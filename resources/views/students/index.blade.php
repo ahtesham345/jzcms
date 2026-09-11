@@ -6,7 +6,53 @@
     <div class="bg-white rounded-lg shadow-sm">
         <!-- Search and Filter Section -->
         <div class="px-6 py-4 border-b border-gray-200">
-            <form method="GET" action="{{ route('students.index') }}" class="space-y-4">
+            {{--
+                Department -> class -> section, narrowed in the browser from
+                the same maps the Add Student form uses. Picking a department
+                leaves only that department's classes on offer, and only the
+                sections under them; picking a class narrows the sections
+                again. Changing the department clears both, so a School
+                filter can never be left carrying a Hifz class.
+            --}}
+            <form method="GET" action="{{ route('students.index') }}" class="space-y-4"
+                x-data="{
+                    departmentId: {{ Js::from((string) request('department_id')) }},
+                    classId: {{ Js::from((string) request('academic_class_id')) }},
+                    sectionId: {{ Js::from((string) request('section_id')) }},
+                    classesByDepartment: {{ Js::from($classesByDepartment) }},
+                    sectionsByClass: {{ Js::from($sectionsByClass) }},
+                    byName(options) {
+                        return [...options].sort((a, b) => a.name.localeCompare(b.name))
+                    },
+                    classesFor(departmentId) {
+                        return departmentId
+                            ? (this.classesByDepartment[departmentId] ?? [])
+                            : Object.values(this.classesByDepartment).flat()
+                    },
+                    classOptions() {
+                        return this.departmentId
+                            ? this.classesFor(this.departmentId)
+                            : this.byName(this.classesFor(''))
+                    },
+                    sectionOptions() {
+                        if (this.classId) {
+                            return this.sectionsByClass[this.classId] ?? []
+                        }
+
+                        return this.byName(
+                            this.classesFor(this.departmentId)
+                                .flatMap((option) => this.sectionsByClass[option.id] ?? [])
+                        )
+                    },
+                    onDepartmentChange() {
+                        this.classId = ''
+                        this.sectionId = ''
+                    },
+                    onClassChange() {
+                        this.sectionId = ''
+                    },
+                }"
+            >
                 <!-- Search Input -->
                 <div>
                     <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search</label>
@@ -45,48 +91,49 @@
                         <select 
                             name="department_id" 
                             id="department_id"
+                            x-model="departmentId"
+                            @change="onDepartmentChange()"
                             class="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                             <option value="">All Departments</option>
-                            @foreach($departments as $department)
-                                <option value="{{ $department->id }}" {{ request('department_id') == $department->id ? 'selected' : '' }}>
-                                    {{ $department->name }}
+                            @foreach($departmentNamesById as $departmentId => $departmentName)
+                                <option value="{{ $departmentId }}" {{ request('department_id') == $departmentId ? 'selected' : '' }}>
+                                    {{ $departmentName }}
                                 </option>
                             @endforeach
                         </select>
                     </div>
 
-                    <!-- Academic Class Filter -->
+                    <!-- Academic Class Filter, narrowed by department -->
                     <div>
                         <label for="academic_class_id" class="block text-sm font-medium text-gray-700 mb-1">Class</label>
                         <select 
                             name="academic_class_id" 
                             id="academic_class_id"
+                            x-model="classId"
+                            @change="onClassChange()"
                             class="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                             <option value="">All Classes</option>
-                            @foreach($academicClasses as $class)
-                                <option value="{{ $class->id }}" {{ request('academic_class_id') == $class->id ? 'selected' : '' }}>
-                                    {{ $class->name }}
-                                </option>
-                            @endforeach
+                            <template x-for="option in classOptions()" :key="option.id">
+                                <option :value="option.id" x-text="option.name"></option>
+                            </template>
                         </select>
                     </div>
 
-                    <!-- Section Filter -->
+                    <!-- Section Filter, narrowed by class and then department -->
                     <div>
                         <label for="section_id" class="block text-sm font-medium text-gray-700 mb-1">Section</label>
                         <select 
                             name="section_id" 
                             id="section_id"
+                            x-model="sectionId"
                             class="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                             <option value="">All Sections</option>
-                            @foreach($sections as $section)
-                                <option value="{{ $section->id }}" {{ request('section_id') == $section->id ? 'selected' : '' }}>
-                                    {{ $section->name }}
-                                </option>
-                            @endforeach
+                            <template x-for="option in sectionOptions()" :key="option.id">
+                                <option :value="option.id" x-text="option.name"></option>
+                            </template>
                         </select>
                     </div>
 
@@ -183,7 +230,7 @@
                                 Student Name
                             </th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Class
+                                Class / Semester
                             </th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                 Section
@@ -232,7 +279,7 @@
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {{ $student->academicClass->name }}
+                                    {{ $student->placementClassNames() ?: '—' }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {{ $student->section?->name ?? '—' }}

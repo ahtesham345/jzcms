@@ -106,7 +106,7 @@ class AdmissionApplication extends Model
         'Hifz + School' => ['madrassa' => 'Hifz', 'school' => 'School'],
         'School' => ['school' => 'School'],
         'Dars-e-Nizami' => ['madrassa' => 'Dars-e-Nizami'],
-        'Dars-e-Nizami + Computer' => ['madrassa' => 'Dars-e-Nizami'],
+        'Dars-e-Nizami + Computer' => ['madrassa' => 'Dars-e-Nizami', 'computer' => 'Computer'],
     ];
 
     /**

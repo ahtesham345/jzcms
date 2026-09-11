@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Department;
 use App\Models\User;
+use App\Support\AcademicPlacement;
 use Database\Seeders\AdmissionDepartmentClassSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -368,5 +369,92 @@ class DepartmentManagementTest extends TestCase
                 "{$department->name} should not have been given a guessed date."
             );
         }
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* How the pages explain the setup a placement depends on */
+    /* ---------------------------------------------------------------- */
+
+    public function test_the_listing_explains_how_departments_must_be_set_up(): void
+    {
+        $this->department();
+
+        $wording = $this->readableText($this->get(route('departments.index'))->assertOk()->getContent());
+
+        // The rule an administrator has to know: one department per
+        // programme, and a combined student type is not one of them.
+        $this->assertStringContainsString('Create each programme as its own department.', $wording);
+        $this->assertStringContainsString('must never be created as one combined department', $wording);
+        $this->assertStringContainsString('Hifz + School', $wording);
+    }
+
+    public function test_the_listing_names_the_departments_the_mapping_needs(): void
+    {
+        $response = $this->get(route('departments.index'))->assertOk();
+
+        // Read off the mapping rather than typed out here, so a student type
+        // added to it is named on the page without this test being edited -
+        // and so the page can never name a department the mapping does not.
+        foreach (AcademicPlacement::requiredDepartmentNames() as $name) {
+            $response->assertSee($name);
+        }
+    }
+
+    public function test_both_department_forms_carry_the_naming_guidance(): void
+    {
+        $department = $this->department();
+
+        foreach ([route('departments.create'), route('departments.edit', $department)] as $url) {
+            $wording = $this->readableText($this->get($url)->assertOk()->getContent());
+
+            $this->assertStringContainsString('Create each programme as its own department.', $wording);
+            $this->assertStringContainsString('must never be created as one combined department', $wording);
+        }
+    }
+
+    /**
+     * Reduce a rendered page to the words a reader would see.
+     *
+     * Markup out, entities decoded and runs of whitespace collapsed, so these
+     * assertions are about the wording rather than about where the Blade
+     * happens to wrap a line. A sentence that spans two lines in the template
+     * is one sentence on the page, and this is what makes the test agree.
+     */
+    private function readableText(string $html): string
+    {
+        return trim((string) preg_replace('/\s+/', ' ', html_entity_decode(strip_tags($html))));
+    }
+
+    public function test_the_guidance_names_every_department_the_mapping_resolves_against(): void
+    {
+        // The whole point of deriving the list: Hifz + School is a student
+        // type made of two departments, and contributes those two rather
+        // than a combined one of its own.
+        $this->assertSame(
+            ['Hifz', 'School', 'Dars-e-Nizami', 'Computer'],
+            AcademicPlacement::requiredDepartmentNames()
+        );
+    }
+
+    public function test_the_guidance_does_not_restrict_what_an_admin_may_create(): void
+    {
+        // The pages advise; they do not enforce. A department named after a
+        // combination is still accepted, still editable and still deletable
+        // - the notice exists precisely because nothing stops it.
+        $this->post(route('departments.store'), $this->payload([
+            'name' => 'Hifz + School',
+            'code' => 'HFZSCH',
+        ]))->assertRedirect(route('departments.index'));
+
+        $this->assertDatabaseHas('departments', ['name' => 'Hifz + School']);
+
+        $combined = Department::where('name', 'Hifz + School')->firstOrFail();
+
+        $this->put(route('departments.update', $combined), $this->payload([
+            'name' => 'Hifz and School',
+            'code' => 'HFZSCH',
+        ]))->assertRedirect(route('departments.index'));
+
+        $this->assertDatabaseHas('departments', ['name' => 'Hifz and School']);
     }
 }

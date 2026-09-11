@@ -43,8 +43,12 @@ trait ValidatesAcademicPlacement
 
         $spansBothTracks = AcademicPlacement::spansBothTracks($studentType);
         $soleSide = AcademicPlacement::soleSide($studentType);
+        $sides = AcademicPlacement::sides($studentType);
 
-        return [
+        // The plain fields belong to a student type placed on one programme;
+        // a combined type posts one prefixed set per side instead. Whichever
+        // set does not apply is prohibited outright.
+        $rules = [
             'department_id' => $spansBothTracks
                 ? $this->unusedFieldRules()
                 : $this->departmentRules($studentType, $soleSide),
@@ -54,26 +58,60 @@ trait ValidatesAcademicPlacement
             'section_id' => $spansBothTracks
                 ? $this->unusedFieldRules()
                 : $this->sectionRules('academic_class_id'),
+        ];
 
-            'madrassa_department_id' => $spansBothTracks
-                ? $this->departmentRules($studentType, 'madrassa')
-                : $this->unusedFieldRules(),
-            'madrassa_class_id' => $spansBothTracks
-                ? $this->classRules('madrassa_department_id')
-                : $this->unusedFieldRules(),
-            'madrassa_section_id' => $spansBothTracks
-                ? $this->sectionRules('madrassa_class_id')
-                : $this->unusedFieldRules(),
+        // Every side the mapping knows about, not only the two this used to
+        // name. A side the chosen student type does not use is prohibited,
+        // which is what stops a Hifz + School submission carrying a Computer
+        // placement it has no business holding.
+        foreach (array_keys(AcademicPlacement::SIDE_TRACKS) as $side) {
+            $used = $spansBothTracks && in_array($side, $sides, true);
 
-            'school_department_id' => $spansBothTracks
-                ? $this->departmentRules($studentType, 'school')
-                : $this->unusedFieldRules(),
-            'school_class_id' => $spansBothTracks
-                ? $this->classRules('school_department_id')
-                : $this->unusedFieldRules(),
-            'school_section_id' => $spansBothTracks
-                ? $this->sectionRules('school_class_id')
-                : $this->unusedFieldRules(),
+            $rules[$side.'_department_id'] = $used
+                ? $this->departmentRules($studentType, $side)
+                : $this->unusedFieldRules();
+            $rules[$side.'_class_id'] = $used
+                ? $this->classRules($side.'_department_id')
+                : $this->unusedFieldRules();
+            $rules[$side.'_section_id'] = $used
+                ? $this->sectionRules($side.'_class_id')
+                : $this->unusedFieldRules();
+        }
+
+        // The Computer semester. Optional on submission - a new Computer
+        // student starts at the first stage of the course, which the
+        // placement fills in - but a value that is sent has to be a real,
+        // active semester of the configured course.
+        $rules[AcademicPlacement::semesterField()] = $this->usesComputerSide($studentType)
+            ? $this->computerSemesterRules()
+            : $this->unusedFieldRules();
+
+        return $rules;
+    }
+
+    /**
+     * Determine whether this student type is placed in the Computer course.
+     */
+    private function usesComputerSide(?string $studentType): bool
+    {
+        return in_array(
+            AcademicPlacement::SEMESTER_SIDE,
+            AcademicPlacement::sides($studentType),
+            true
+        );
+    }
+
+    /**
+     * Build the rules for the Computer semester.
+     *
+     * @return array<int, mixed>
+     */
+    private function computerSemesterRules(): array
+    {
+        return [
+            'nullable',
+            'integer',
+            Rule::exists('computer_course_semesters', 'id')->where('status', true),
         ];
     }
 
@@ -84,11 +122,17 @@ trait ValidatesAcademicPlacement
      */
     protected function placementFields(): array
     {
-        return [
-            'department_id', 'academic_class_id', 'section_id',
-            'madrassa_department_id', 'madrassa_class_id', 'madrassa_section_id',
-            'school_department_id', 'school_class_id', 'school_section_id',
-        ];
+        $fields = ['department_id', 'academic_class_id', 'section_id'];
+
+        foreach (array_keys(AcademicPlacement::SIDE_TRACKS) as $side) {
+            $fields[] = $side.'_department_id';
+            $fields[] = $side.'_class_id';
+            $fields[] = $side.'_section_id';
+        }
+
+        $fields[] = AcademicPlacement::semesterField();
+
+        return $fields;
     }
 
     /**
@@ -173,28 +217,38 @@ trait ValidatesAcademicPlacement
      */
     protected function placementMessages(): array
     {
-        return [
+        // The plain fields, used by a student type placed on one programme.
+        $messages = [
             'department_id.exists' => 'The selected department does not match the chosen student type.',
-            'department_id.prohibited' => 'A Hifz + School student needs a madrassa placement and a school placement.',
+            'department_id.prohibited' => 'This student type is placed on each of its programmes separately.',
             'academic_class_id.exists' => 'The selected class is inactive or does not belong to the selected department.',
-            'academic_class_id.prohibited' => 'A Hifz + School student needs a madrassa placement and a school placement.',
+            'academic_class_id.prohibited' => 'This student type is placed on each of its programmes separately.',
             'section_id.exists' => 'The selected section is inactive or does not belong to the selected class.',
-            'section_id.prohibited' => 'A Hifz + School student needs a madrassa section and a school section.',
+            'section_id.prohibited' => 'This student type is placed on each of its programmes separately.',
 
-            'madrassa_department_id.exists' => 'The selected madrassa department does not match the chosen student type.',
-            'madrassa_department_id.prohibited' => 'This student type does not have a madrassa placement.',
-            'madrassa_class_id.exists' => 'The selected madrassa class is inactive or does not belong to the madrassa department.',
-            'madrassa_class_id.prohibited' => 'This student type does not have a madrassa placement.',
-            'madrassa_section_id.exists' => 'The selected madrassa section is inactive or does not belong to the madrassa class.',
-            'madrassa_section_id.prohibited' => 'This student type does not have a madrassa placement.',
-
-            'school_department_id.exists' => 'The selected school department does not match the chosen student type.',
-            'school_department_id.prohibited' => 'This student type does not have a school placement.',
-            'school_class_id.exists' => 'The selected school class is inactive or does not belong to the school department.',
-            'school_class_id.prohibited' => 'This student type does not have a school placement.',
-            'school_section_id.exists' => 'The selected school section is inactive or does not belong to the school class.',
-            'school_section_id.prohibited' => 'This student type does not have a school placement.',
+            'computer_semester_id.exists' => 'The selected semester is inactive or is not part of the Computer course.',
+            'computer_semester_id.prohibited' => 'This student type is not enrolled in the Computer course.',
         ];
+
+        // One set per side, worded in that programme's own terms.
+        $labels = [
+            'madrassa' => 'madrassa',
+            'school' => 'school',
+            'computer' => 'Computer',
+        ];
+
+        foreach (array_keys(AcademicPlacement::SIDE_TRACKS) as $side) {
+            $label = $labels[$side] ?? $side;
+
+            $messages[$side.'_department_id.exists'] = "The selected {$label} department does not match the chosen student type.";
+            $messages[$side.'_department_id.prohibited'] = "This student type does not have a {$label} placement.";
+            $messages[$side.'_class_id.exists'] = "The selected {$label} class is inactive or does not belong to the {$label} department.";
+            $messages[$side.'_class_id.prohibited'] = "This student type does not have a {$label} placement.";
+            $messages[$side.'_section_id.exists'] = "The selected {$label} section is inactive or does not belong to the {$label} class.";
+            $messages[$side.'_section_id.prohibited'] = "This student type does not have a {$label} placement.";
+        }
+
+        return $messages;
     }
 
     /**

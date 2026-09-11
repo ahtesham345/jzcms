@@ -346,6 +346,7 @@
                             :department-ids-by-student-type="$departmentIdsByStudentType"
                             :classes-by-department="$classesByDepartment"
                             :sections-by-class="$sectionsByClass"
+                            :computer-semesters="$computerSemesters"
                         />
 
                         <!-- Student Status -->

@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\AdmissionTestSchedulingController;
 use App\Http\Controllers\Admin\AttendanceController;
 use App\Http\Controllers\Admin\AttendanceReportController;
 use App\Http\Controllers\Admin\AttendanceSessionSummaryController;
+use App\Http\Controllers\Admin\ComputerCourseController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\DepartmentController;
 use App\Http\Controllers\Admin\DisciplineRecordController;
 use App\Http\Controllers\Admin\MadrassaDailyRecordController;
@@ -34,6 +36,7 @@ use App\Http\Controllers\Admin\StudentPromotionController;
 use App\Http\Controllers\Admin\StudentResultController;
 use App\Http\Controllers\Admin\StudentResultHistoryController;
 use App\Http\Controllers\Admin\StudentResultReportController;
+use App\Http\Controllers\Admin\StudentTermsSettingController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ProfileController;
@@ -44,9 +47,9 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/dashboard', function () {
-    return view('admin.dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 /*
  * Public online admission form (no login required).
@@ -85,6 +88,13 @@ Route::middleware('auth')->group(function () {
     Route::put('settings/admission-form', [AdmissionFormSettingController::class, 'update'])
         ->name('settings.admission-form.update');
 
+    // The instructions each department's guardians agree to. A third
+    // settings page beside the two above, behind the same permissions.
+    Route::get('settings/student-terms', [StudentTermsSettingController::class, 'edit'])
+        ->name('settings.student-terms.edit');
+    Route::put('settings/student-terms', [StudentTermsSettingController::class, 'update'])
+        ->name('settings.student-terms.update');
+
     // Academic Sessions
     Route::resource('academic-sessions', AcademicSessionController::class);
 
@@ -95,6 +105,21 @@ Route::middleware('auth')->group(function () {
     Route::resource('classes', AcademicClassController::class);
 
     // Sections
+
+    // The Computer department's course structure: one course, six semesters.
+    // Read and edit only - the structure is seeded with the department, and
+    // what an admin configures is its dates and curriculum. Declared before
+    // the semester routes so "semesters" is never read as a course.
+    Route::get('computer-course', [ComputerCourseController::class, 'index'])
+        ->name('computer-course.index');
+    Route::get('computer-course/semesters/{semester}/edit', [ComputerCourseController::class, 'editSemester'])
+        ->name('computer-course.semesters.edit');
+    Route::put('computer-course/semesters/{semester}', [ComputerCourseController::class, 'updateSemester'])
+        ->name('computer-course.semesters.update');
+    Route::get('computer-course/{computerCourse}/edit', [ComputerCourseController::class, 'edit'])
+        ->name('computer-course.edit');
+    Route::put('computer-course/{computerCourse}', [ComputerCourseController::class, 'update'])
+        ->name('computer-course.update');
     Route::resource('sections', SectionController::class);
 
     // Students

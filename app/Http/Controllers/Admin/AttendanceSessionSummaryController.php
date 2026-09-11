@@ -165,7 +165,7 @@ class AttendanceSessionSummaryController extends Controller
             'sessionStart' => $summary->start(),
             'sessionEnd' => $summary->end(),
             'group' => $this->groupHeading($filters),
-            'academicTracks' => StudentAcademicEnrollment::ACADEMIC_TRACKS,
+            'academicTracks' => StudentAcademicEnrollment::attendanceTracks(),
             ...$this->filterOptions(),
         ];
     }
@@ -187,7 +187,7 @@ class AttendanceSessionSummaryController extends Controller
             'sessionStart' => null,
             'sessionEnd' => null,
             'group' => $this->groupHeading($filters),
-            'academicTracks' => StudentAcademicEnrollment::ACADEMIC_TRACKS,
+            'academicTracks' => StudentAcademicEnrollment::attendanceTracks(),
             'students' => $this->paginate(collect(), request()),
             ...$this->filterOptions(),
         ];
@@ -204,9 +204,9 @@ class AttendanceSessionSummaryController extends Controller
     private function resolve(Request $request): array
     {
         $track = $request->input('academic_track');
-        $track = in_array($track, StudentAcademicEnrollment::ACADEMIC_TRACKS, true)
+        $track = in_array($track, StudentAcademicEnrollment::attendanceTracks(), true)
             ? $track
-            : StudentAcademicEnrollment::ACADEMIC_TRACKS[0];
+            : StudentAcademicEnrollment::attendanceTracks()[0];
 
         // Validated against the table rather than trusted: an unknown id
         // falls back to the session being worked in.

@@ -82,7 +82,7 @@ class StudentAttendanceHistoryController extends Controller
         return view('students.attendance', [
             'student' => $student,
             'filters' => $filters,
-            'tracks' => $tracks !== [] ? $tracks : StudentAcademicEnrollment::ACADEMIC_TRACKS,
+            'tracks' => $tracks !== [] ? $tracks : StudentAcademicEnrollment::attendanceTracks(),
             'availablePeriods' => $availablePeriods,
             'allPeriodsValue' => self::ALL_PERIODS,
             'records' => $records,
@@ -154,13 +154,13 @@ class StudentAttendanceHistoryController extends Controller
     {
         $track = $request->input('academic_track');
 
-        if (! in_array($track, StudentAcademicEnrollment::ACADEMIC_TRACKS, true)) {
+        if (! in_array($track, StudentAcademicEnrollment::attendanceTracks(), true)) {
             $track = null;
         }
 
         // A track the student has never been on shows nothing, so the
         // default is one they have.
-        $track ??= $tracks[0] ?? StudentAcademicEnrollment::ACADEMIC_TRACKS[0];
+        $track ??= $tracks[0] ?? StudentAcademicEnrollment::attendanceTracks()[0];
 
         $session = $request->input('academic_session_id');
         $session = is_numeric($session) ? (int) $session : null;

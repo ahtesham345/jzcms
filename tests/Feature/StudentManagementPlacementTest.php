@@ -12,7 +12,9 @@ use App\Models\Student;
 use App\Models\StudentAcademicEnrollment;
 use App\Models\User;
 use Database\Seeders\AdmissionDepartmentClassSeeder;
+use Database\Seeders\ComputerCourseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -721,5 +723,151 @@ class StudentManagementPlacementTest extends TestCase
         $this->post(route('students.store'), $this->payload())->assertSessionHasNoErrors();
 
         return Student::sole();
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* The Class column on the listing */
+    /* ---------------------------------------------------------------- */
+
+    public function test_the_listing_shows_the_class_of_a_hifz_student(): void
+    {
+        $this->post(route('students.store'), $this->payload())->assertSessionHasNoErrors();
+
+        $this->assertSame($this->nazra->name, Student::sole()->placementClassNames());
+
+        $this->get(route('students.index'))
+            ->assertOk()
+            ->assertSee($this->nazra->name);
+    }
+
+    public function test_the_listing_shows_the_class_of_a_school_student(): void
+    {
+        $this->post(route('students.store'), $this->payload([
+            'student_type' => 'School',
+            'department_id' => $this->school->id,
+            'academic_class_id' => $this->primary->id,
+            'section_id' => $this->primaryA->id,
+        ]))->assertSessionHasNoErrors();
+
+        $this->assertSame($this->primary->name, Student::sole()->placementClassNames());
+    }
+
+    public function test_the_listing_shows_both_classes_of_a_hifz_and_school_student(): void
+    {
+        $this->post(route('students.store'), $this->dualPayload())->assertSessionHasNoErrors();
+
+        $student = Student::sole();
+
+        // Madrassa first, then School: the order activeAcademicEnrollments()
+        // already reads them in. Both halves of the placement on one line,
+        // which is the whole point - the student row itself holds only the
+        // madrassa class.
+        $this->assertSame(
+            $this->nazra->name.', '.$this->primary->name,
+            $student->placementClassNames()
+        );
+
+        $this->assertSame($this->nazra->id, $student->academic_class_id);
+
+        $this->get(route('students.index'))
+            ->assertOk()
+            ->assertSee($this->nazra->name.', '.$this->primary->name);
+    }
+
+    public function test_the_listing_shows_both_placements_of_a_dars_e_nizami_and_computer_student(): void
+    {
+        // Computer is a department in its own right, so this student holds
+        // two placements - and the Computer one is described by the semester
+        // of the course they are in, not by the class that carries it.
+        $this->seed(ComputerCourseSeeder::class);
+
+        $computerDepartment = Department::where('name', 'Computer')->firstOrFail();
+        $courseClass = AcademicClass::where('department_id', $computerDepartment->id)->firstOrFail();
+
+        $this->post(route('students.store'), $this->payload([
+            'student_type' => 'Dars-e-Nizami + Computer',
+            'madrassa_department_id' => $this->darsENizami->id,
+            'madrassa_class_id' => $this->salEAwwal->id,
+            'madrassa_section_id' => null,
+            'computer_department_id' => $computerDepartment->id,
+            'computer_class_id' => $courseClass->id,
+            'computer_section_id' => null,
+            'department_id' => null,
+            'academic_class_id' => null,
+            'section_id' => null,
+        ]))->assertSessionHasNoErrors();
+
+        $student = Student::sole();
+
+        $this->assertCount(2, $student->activeAcademicEnrollments);
+
+        // The madrassa placement leads, the way it does for Hifz + School.
+        $this->assertSame(
+            $this->salEAwwal->name.', 1st Semester',
+            $student->placementClassNames()
+        );
+    }
+
+    public function test_the_listing_falls_back_to_the_student_row_when_no_enrollment_is_active(): void
+    {
+        $student = $this->createStudent();
+
+        // A student recorded before the enrollments existed, or one whose
+        // placements have all been closed. The class on their own row is
+        // still what the listing has to show.
+        $student->academicEnrollments()->update(['status' => 'Completed']);
+
+        $this->assertSame($this->nazra->name, $student->fresh()->placementClassNames());
+
+        $this->get(route('students.index'))
+            ->assertOk()
+            ->assertSee($this->nazra->name);
+    }
+
+    public function test_only_current_placements_are_listed(): void
+    {
+        $this->post(route('students.store'), $this->dualPayload())->assertSessionHasNoErrors();
+
+        $student = Student::sole();
+
+        // The school half has ended. What is left is where the student
+        // actually is, not where they have been.
+        $student->academicEnrollments()
+            ->where('academic_track', 'School')
+            ->update(['status' => 'Completed']);
+
+        $this->assertSame($this->nazra->name, $student->fresh()->placementClassNames());
+    }
+
+    public function test_the_class_column_costs_the_same_for_many_students_as_for_one(): void
+    {
+        foreach (range(1, 5) as $index) {
+            $this->post(route('students.store'), $this->dualPayload([
+                'registration_number' => 'STD-2026-'.str_pad((string) $index, 4, '0', STR_PAD_LEFT),
+            ]))->assertSessionHasNoErrors();
+        }
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->get(route('students.index'))->assertOk();
+
+        $log = collect(DB::getQueryLog());
+
+        DB::disableQueryLog();
+        DB::flushQueryLog();
+
+        // The enrollments and their classes are eager loaded, so reading a
+        // page of dual-track students is a fixed number of queries rather
+        // than two more for every row.
+        $enrollmentQueries = $log
+            ->filter(fn ($entry) => str_contains($entry['query'], 'student_academic_enrollments'))
+            ->count();
+
+        $this->assertLessThanOrEqual(
+            2,
+            $enrollmentQueries,
+            'The listing is loading enrollments per student rather than for the page'
+        );
     }
 }

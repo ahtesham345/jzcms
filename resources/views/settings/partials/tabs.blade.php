@@ -3,12 +3,14 @@
      * The Settings module's own navigation.
      *
      * In the page rather than in the sidebar, which carries one top-level
-     * Settings link and no dropdown. Both pages write the same singleton
-     * row; these are two views of it, not two settings systems.
+     * Settings link and no dropdown. The first two pages write the same
+     * singleton row and the third writes one row per department; all three
+     * are the institution's configuration, not three settings systems.
      */
     $tabs = [
         ['route' => 'settings.edit', 'label' => 'General Settings'],
         ['route' => 'settings.admission-form.edit', 'label' => 'Admission Form Settings'],
+        ['route' => 'settings.student-terms.edit', 'label' => 'Student Terms / Instructions'],
     ];
 @endphp
 
