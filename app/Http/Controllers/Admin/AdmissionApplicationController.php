@@ -16,6 +16,7 @@ use App\Models\Student;
 use App\Support\AcademicPlacement;
 use App\Support\AdmissionApplicationFilters;
 use App\Support\ResultReportLanguage;
+use App\Support\StudentRegistrationNumber;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -194,7 +195,7 @@ class AdmissionApplicationController extends Controller
                     $primaryClass = $application->madrassaClass ?? $application->schoolClass;
 
                     $student = Student::create([
-                        'registration_number' => $this->nextRegistrationNumber(),
+                        'registration_number' => StudentRegistrationNumber::next(),
                         'roll_number' => $placement['roll_number'] ?? null,
                         // The already stored path is reused: the file itself
                         // is never copied or uploaded again.
@@ -416,24 +417,6 @@ class AdmissionApplicationController extends Controller
         return AdmissionApplication::departmentForSide($studentType, 'madrassa') !== null
             ? 'Madrassa'
             : 'School';
-    }
-
-    /**
-     * Work out the next student registration number for the current year.
-     */
-    private function nextRegistrationNumber(): string
-    {
-        $year = date('Y');
-        $prefix = "STD-{$year}-";
-
-        $lastNumber = Student::where('registration_number', 'like', "{$prefix}%")
-            ->lockForUpdate()
-            ->orderByDesc('registration_number')
-            ->value('registration_number');
-
-        $nextNumber = $lastNumber ? ((int) substr($lastNumber, strlen($prefix))) + 1 : 1;
-
-        return $prefix.str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
     }
 
     /**

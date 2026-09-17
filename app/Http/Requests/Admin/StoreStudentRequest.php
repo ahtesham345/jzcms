@@ -29,7 +29,8 @@ class StoreStudentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'registration_number' => ['required', 'string', 'max:255', 'unique:students,registration_number'],
+            // Registration number is auto-generated and must not be accepted
+            // from the form. If present, it will be ignored.
             'roll_number' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'mimes:jpeg,jpg,png', 'max:2048'],
             'full_name' => ['required', 'string', 'max:255'],

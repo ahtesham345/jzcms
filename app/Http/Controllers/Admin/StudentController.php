@@ -13,7 +13,9 @@ use App\Models\ParentGuardian;
 use App\Models\Student;
 use App\Models\StudentResult;
 use App\Support\AcademicPlacement;
+use App\Support\StudentRegistrationNumber;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -147,11 +149,24 @@ class StudentController extends Controller
             $data['photo'] = $request->file('photo')->store('students', 'public');
         }
 
-        $this->createWithPlacement($data);
+        // Registration number generation can collide under concurrent
+        // creation, so retry the whole creation on a unique constraint
+        // violation. The same strategy admission approval uses.
+        $attempts = 0;
 
-        return redirect()
-            ->route('students.index')
-            ->with('success', 'Student created successfully.');
+        while (true) {
+            try {
+                $student = $this->createWithPlacement($data);
+
+                return redirect()
+                    ->route('students.index')
+                    ->with('success', 'Student created successfully.');
+            } catch (UniqueConstraintViolationException $e) {
+                if (++$attempts >= 3) {
+                    throw $e;
+                }
+            }
+        }
     }
 
     /**
@@ -175,6 +190,7 @@ class StudentController extends Controller
 
             $student = Student::create([
                 ...$this->studentAttributes($data),
+                'registration_number' => StudentRegistrationNumber::next(),
                 // The students table holds one placement. A Hifz + School
                 // student is recorded against the madrassa side here and
                 // keeps the school side on its own enrollment, which is the
