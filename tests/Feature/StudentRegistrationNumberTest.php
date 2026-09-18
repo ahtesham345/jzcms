@@ -78,14 +78,15 @@ class StudentRegistrationNumberTest extends TestCase
         $student = Student::sole();
 
         $this->assertMatchesRegularExpression('/^STD-\d{4}-\d{4}$/', $student->registration_number);
-        $this->assertStringStartsWith('STD-'.date('Y').'-', $student->registration_number);
+        // Uses the session's start year, not current calendar year
+        $this->assertStringStartsWith('STD-2026-', $student->registration_number);
     }
 
     public function test_manual_creation_generates_the_next_sequential_number(): void
     {
-        // Seed one student with an existing registration number
+        // Seed one student with an existing registration number in the same session year
         $existing = Student::create(array_merge($this->studentAttributes(), [
-            'registration_number' => 'STD-'.date('Y').'-0005',
+            'registration_number' => 'STD-2026-0005',
         ]));
 
         $this->post(route('students.store'), $this->payload(['full_name' => 'New Student']))
@@ -93,7 +94,7 @@ class StudentRegistrationNumberTest extends TestCase
 
         $newStudent = Student::where('id', '!=', $existing->id)->sole();
 
-        $this->assertSame('STD-'.date('Y').'-0006', $newStudent->registration_number);
+        $this->assertSame('STD-2026-0006', $newStudent->registration_number);
     }
 
     public function test_manual_creation_starts_at_0001_when_no_students_exist(): void
@@ -103,7 +104,7 @@ class StudentRegistrationNumberTest extends TestCase
         $this->post(route('students.store'), $this->payload())
             ->assertSessionHasNoErrors();
 
-        $this->assertSame('STD-'.date('Y').'-0001', Student::sole()->registration_number);
+        $this->assertSame('STD-2026-0001', Student::sole()->registration_number);
     }
 
     public function test_manual_creation_ignores_registration_numbers_from_other_years(): void
@@ -116,9 +117,9 @@ class StudentRegistrationNumberTest extends TestCase
         $this->post(route('students.store'), $this->payload())
             ->assertSessionHasNoErrors();
 
-        $newStudent = Student::where('registration_number', 'like', 'STD-'.date('Y').'-%')->sole();
+        $newStudent = Student::where('registration_number', 'like', 'STD-2026-%')->sole();
 
-        $this->assertSame('STD-'.date('Y').'-0001', $newStudent->registration_number);
+        $this->assertSame('STD-2026-0001', $newStudent->registration_number);
     }
 
     public function test_manual_creation_ignores_legacy_registration_numbers(): void
@@ -133,20 +134,20 @@ class StudentRegistrationNumberTest extends TestCase
 
         $newStudent = Student::where('registration_number', 'like', 'STD-%')->sole();
 
-        $this->assertSame('STD-'.date('Y').'-0001', $newStudent->registration_number);
+        $this->assertSame('STD-2026-0001', $newStudent->registration_number);
     }
 
     public function test_manual_creation_does_not_accept_admin_supplied_registration_number(): void
     {
         // Even if an admin somehow posts a registration_number, it must be ignored
         $this->post(route('students.store'), $this->payload([
-            'registration_number' => 'STD-'.date('Y').'-9999',
+            'registration_number' => 'STD-2026-9999',
         ]))->assertSessionHasNoErrors();
 
         $student = Student::sole();
 
         // Should be auto-generated, not the posted value
-        $this->assertSame('STD-'.date('Y').'-0001', $student->registration_number);
+        $this->assertSame('STD-2026-0001', $student->registration_number);
     }
 
     /* ---------------------------------------------------------------- */
@@ -163,14 +164,15 @@ class StudentRegistrationNumberTest extends TestCase
         $student = Student::sole();
 
         $this->assertMatchesRegularExpression('/^STD-\d{4}-\d{4}$/', $student->registration_number);
-        $this->assertStringStartsWith('STD-'.date('Y').'-', $student->registration_number);
+        // Uses the session's start year
+        $this->assertStringStartsWith('STD-2026-', $student->registration_number);
     }
 
     public function test_admission_approval_generates_the_next_sequential_number(): void
     {
-        // Existing student
+        // Existing student in the same session year
         Student::create(array_merge($this->studentAttributes(), [
-            'registration_number' => 'STD-'.date('Y').'-0003',
+            'registration_number' => 'STD-2026-0003',
         ]));
 
         $application = $this->application();
@@ -180,7 +182,7 @@ class StudentRegistrationNumberTest extends TestCase
 
         $newStudent = Student::where('full_name', 'Ahmed Ali')->sole();
 
-        $this->assertSame('STD-'.date('Y').'-0004', $newStudent->registration_number);
+        $this->assertSame('STD-2026-0004', $newStudent->registration_number);
     }
 
     /* ---------------------------------------------------------------- */
@@ -194,7 +196,7 @@ class StudentRegistrationNumberTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $manual1 = Student::where('full_name', 'Manual First')->sole();
-        $this->assertSame('STD-'.date('Y').'-0001', $manual1->registration_number);
+        $this->assertSame('STD-2026-0001', $manual1->registration_number);
 
         // Admission approval -> 0002
         $app1 = $this->application(['student_name' => 'Approved Second']);
@@ -202,7 +204,7 @@ class StudentRegistrationNumberTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $approved1 = Student::where('full_name', 'Approved Second')->sole();
-        $this->assertSame('STD-'.date('Y').'-0002', $approved1->registration_number);
+        $this->assertSame('STD-2026-0002', $approved1->registration_number);
 
         // Admission approval -> 0003
         $app2 = $this->application(['student_name' => 'Approved Third']);
@@ -210,14 +212,14 @@ class StudentRegistrationNumberTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $approved2 = Student::where('full_name', 'Approved Third')->sole();
-        $this->assertSame('STD-'.date('Y').'-0003', $approved2->registration_number);
+        $this->assertSame('STD-2026-0003', $approved2->registration_number);
 
         // Manual creation -> 0004
         $this->post(route('students.store'), $this->payload(['full_name' => 'Manual Fourth']))
             ->assertSessionHasNoErrors();
 
         $manual2 = Student::where('full_name', 'Manual Fourth')->sole();
-        $this->assertSame('STD-'.date('Y').'-0004', $manual2->registration_number);
+        $this->assertSame('STD-2026-0004', $manual2->registration_number);
     }
 
     /* ---------------------------------------------------------------- */
@@ -233,20 +235,20 @@ class StudentRegistrationNumberTest extends TestCase
 
         $existing2 = Student::create(array_merge($this->studentAttributes(), [
             'full_name' => 'Existing Two',
-            'registration_number' => 'STD-'.date('Y').'-0005',
+            'registration_number' => 'STD-2026-0005',
         ]));
 
-        // Create a new student
+        // Create a new student in the same session
         $this->post(route('students.store'), $this->payload(['full_name' => 'New Student']))
             ->assertSessionHasNoErrors();
 
         // Existing students unchanged
         $this->assertSame('STD-2025-0010', $existing1->fresh()->registration_number);
-        $this->assertSame('STD-'.date('Y').'-0005', $existing2->fresh()->registration_number);
+        $this->assertSame('STD-2026-0005', $existing2->fresh()->registration_number);
 
-        // New student gets next number after existing2
+        // New student gets next number after existing2 (same session year)
         $newStudent = Student::where('full_name', 'New Student')->sole();
-        $this->assertSame('STD-'.date('Y').'-0006', $newStudent->registration_number);
+        $this->assertSame('STD-2026-0006', $newStudent->registration_number);
     }
 
     /* ---------------------------------------------------------------- */
@@ -263,7 +265,7 @@ class StudentRegistrationNumberTest extends TestCase
         $this->assertMatchesRegularExpression('/^STD-\d{4}-\d{4}$/', $student->registration_number);
 
         // Format: STD-YYYY-#### (STD + hyphen + 4-digit year + hyphen + 4-digit sequence)
-        $expectedLength = strlen('STD-'.date('Y').'-0001');
+        $expectedLength = strlen('STD-2026-0001');
         $this->assertSame($expectedLength, strlen($student->registration_number));
     }
 
@@ -277,8 +279,114 @@ class StudentRegistrationNumberTest extends TestCase
 
         $students = Student::orderBy('id')->get();
 
-        $this->assertSame('STD-'.date('Y').'-0001', $students[0]->registration_number);
-        $this->assertSame('STD-'.date('Y').'-0002', $students[1]->registration_number);
+        $this->assertSame('STD-2026-0001', $students[0]->registration_number);
+        $this->assertSame('STD-2026-0002', $students[1]->registration_number);
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Academic Session Year Handling */
+    /* ---------------------------------------------------------------- */
+
+    public function test_registration_number_uses_academic_session_start_year_not_calendar_year(): void
+    {
+        // Session starts in 2023
+        $session2023 = AcademicSession::create([
+            'name' => '2023-2024',
+            'start_date' => '2023-04-01',
+            'end_date' => '2024-03-31',
+            'status' => true,
+        ]);
+
+        $this->post(route('students.store'), $this->payload([
+            'academic_session_id' => $session2023->id,
+        ]))->assertSessionHasNoErrors();
+
+        $student = Student::sole();
+
+        // Should use session start year (2023), not current calendar year
+        $this->assertSame('STD-2023-0001', $student->registration_number);
+    }
+
+    public function test_different_sessions_have_independent_sequences(): void
+    {
+        $session2023 = AcademicSession::create([
+            'name' => '2023-2024',
+            'start_date' => '2023-04-01',
+            'end_date' => '2024-03-31',
+            'status' => true,
+        ]);
+
+        $session2024 = AcademicSession::create([
+            'name' => '2024-2025',
+            'start_date' => '2024-04-01',
+            'end_date' => '2025-03-31',
+            'status' => true,
+        ]);
+
+        // Create student in 2023 session
+        $this->post(route('students.store'), $this->payload([
+            'full_name' => 'Student 2023',
+            'academic_session_id' => $session2023->id,
+        ]))->assertSessionHasNoErrors();
+
+        // Create student in 2024 session
+        $this->post(route('students.store'), $this->payload([
+            'full_name' => 'Student 2024',
+            'academic_session_id' => $session2024->id,
+        ]))->assertSessionHasNoErrors();
+
+        $student2023 = Student::where('full_name', 'Student 2023')->sole();
+        $student2024 = Student::where('full_name', 'Student 2024')->sole();
+
+        // Each session starts its own sequence
+        $this->assertSame('STD-2023-0001', $student2023->registration_number);
+        $this->assertSame('STD-2024-0001', $student2024->registration_number);
+    }
+
+    public function test_session_continues_existing_sequence_for_that_year(): void
+    {
+        // Existing student from 2026 session
+        Student::create(array_merge($this->studentAttributes(), [
+            'registration_number' => 'STD-2026-0047',
+        ]));
+
+        // Create new student in same session (2026-2027)
+        $this->post(route('students.store'), $this->payload())
+            ->assertSessionHasNoErrors();
+
+        $newStudent = Student::where('id', '>', 1)->sole();
+
+        // Continues the 2026 sequence
+        $this->assertSame('STD-2026-0048', $newStudent->registration_number);
+    }
+
+    public function test_mixed_creation_sources_share_sequence_within_same_session(): void
+    {
+        $session2023 = AcademicSession::create([
+            'name' => '2023-2024',
+            'start_date' => '2023-04-01',
+            'end_date' => '2024-03-31',
+            'status' => true,
+        ]);
+
+        // Manual creation in 2023 session
+        $this->post(route('students.store'), $this->payload([
+            'full_name' => 'Manual 2023',
+            'academic_session_id' => $session2023->id,
+        ]))->assertSessionHasNoErrors();
+
+        // Admission approval in 2023 session
+        $app = $this->application(['student_name' => 'Approved 2023']);
+        $this->post(route('admissions.approve', $app->id), array_merge($this->approvalPayload(), [
+            'academic_session_id' => $session2023->id,
+        ]))->assertSessionHasNoErrors();
+
+        $manual = Student::where('full_name', 'Manual 2023')->sole();
+        $approved = Student::where('full_name', 'Approved 2023')->sole();
+
+        // Both share the 2023 sequence
+        $this->assertSame('STD-2023-0001', $manual->registration_number);
+        $this->assertSame('STD-2023-0002', $approved->registration_number);
     }
 
     /* ---------------------------------------------------------------- */
@@ -291,13 +399,13 @@ class StudentRegistrationNumberTest extends TestCase
 
         Student::create(array_merge($this->studentAttributes(), [
             'full_name' => 'Student One',
-            'registration_number' => 'STD-'.date('Y').'-0001',
+            'registration_number' => 'STD-2026-0001',
         ]));
 
         // Attempt to create another with the same registration number
         Student::create(array_merge($this->studentAttributes(), [
             'full_name' => 'Student Two',
-            'registration_number' => 'STD-'.date('Y').'-0001',
+            'registration_number' => 'STD-2026-0001',
         ]));
     }
 

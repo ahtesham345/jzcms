@@ -194,8 +194,10 @@ class AdmissionApplicationController extends Controller
                     // to the placement chosen during approval.
                     $primaryClass = $application->madrassaClass ?? $application->schoolClass;
 
+                    $session = AcademicSession::findOrFail($placement['academic_session_id']);
+
                     $student = Student::create([
-                        'registration_number' => StudentRegistrationNumber::next(),
+                        'registration_number' => StudentRegistrationNumber::next($session),
                         'roll_number' => $placement['roll_number'] ?? null,
                         // The already stored path is reused: the file itself
                         // is never copied or uploaded again.

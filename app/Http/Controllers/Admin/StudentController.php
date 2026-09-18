@@ -188,9 +188,11 @@ class StudentController extends Controller
             $placements = AcademicPlacement::fromValidated($data);
             $primary = AcademicPlacement::primary($placements);
 
+            $session = AcademicSession::findOrFail($data['academic_session_id']);
+
             $student = Student::create([
                 ...$this->studentAttributes($data),
-                'registration_number' => StudentRegistrationNumber::next(),
+                'registration_number' => StudentRegistrationNumber::next($session),
                 // The students table holds one placement. A Hifz + School
                 // student is recorded against the madrassa side here and
                 // keeps the school side on its own enrollment, which is the
